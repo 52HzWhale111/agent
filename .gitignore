@@ -1,0 +1,52 @@
+# ---- 密钥 / 环境变量（只提交 .env.example）----
+.env
+.env.*
+!.env.example
+
+# ---- Node / 前端 ----
+node_modules/
+.next/
+out/
+dist/
+build/
+.npm/
+.pnpm-store/
+*.log
+
+# ---- Python / 后端 ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# ---- Java / 沙箱 ----
+*.class
+target/
+.gradle/
+
+# ---- 数据库 / 运行数据 ----
+*.db
+*.sqlite3
+data/
+uploads/
+tmp/
+
+# ---- 大文件（视频、PPT、数据集走网盘）----
+*.mp4
+*.mov
+*.zip
+*.7z
+*.tar.gz
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
