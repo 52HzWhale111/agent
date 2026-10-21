@@ -38,3 +38,67 @@ def test_compose_structure():
     assert services['gateway']['ports'] == ['127.0.0.1:8000:8000']
     assert services['sandbox']['volumes'] == ['gateway-data:/data:ro']
     assert 'ports' not in services['db']
+
+
+def test_monitor_outage_retry_recovery_and_no_duplicates(monkeypatch):
+    state = {}
+    calls = []
+    healthy = True
+    delivered = True
+    monkeypatch.setattr(monitor, 'check', lambda url, authenticated=True: healthy)
+    def notify(service, status):
+        calls.append((service, status))
+        return delivered
+    monkeypatch.setattr(monitor, 'alert', notify)
+    targets = {'sandbox': 'http://sandbox/health'}
+    monitor.poll(state, targets)
+    assert state == {'sandbox': True} and calls == []
+    healthy, delivered = False, False
+    monitor.poll(state, targets)
+    assert state == {'sandbox': True}
+    delivered = True
+    monitor.poll(state, targets)
+    monitor.poll(state, targets)
+    assert calls == [('sandbox', False), ('sandbox', False)]
+    healthy = True
+    monitor.poll(state, targets)
+    monitor.poll(state, targets)
+    assert calls[-1] == ('sandbox', True) and len(calls) == 3
+
+
+def test_monitor_real_http_webhook(monkeypatch):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+    events = []
+    healthy = True
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            assert self.headers.get('Authorization') is None
+            self.send_response(200 if healthy else 503)
+            self.end_headers()
+        def do_POST(self):
+            events.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+            self.send_response(200)
+            self.end_headers()
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    monkeypatch.setenv('ALERT_WEBHOOK_URL', url + '/notifications')
+    try:
+        state = {}
+        targets = {'sandbox': url + '/health'}
+        monitor.poll(state, targets)
+        healthy = False
+        monitor.poll(state, targets)
+        monitor.poll(state, targets)
+        healthy = True
+        monitor.poll(state, targets)
+        assert [event['status'] for event in events] == ['unavailable', 'recovered']
+        assert all(event['service'] == 'sandbox' for event in events)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)

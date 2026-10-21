@@ -23,7 +23,7 @@ python -m pytest gateway/tests -q
 
 运行配置从进程环境读取；本地 uvicorn 不会自动读取 `.env`。可在 PowerShell 用 `$env:KNOWLEDGE_AGENT_URL='http://127.0.0.1:8100'` 设置。Compose 会读取仓库 `.env`。
 
-本地 OpenAPI：`http://127.0.0.1:8000/docs`。配置 GATEWAY_API_KEY 后，使用带 Authorization 头的 OpenAPI 客户端或 curl；浏览器 Swagger 页的后续请求也需要认证。
+本地 OpenAPI：`http://127.0.0.1:8000/docs`。配置 GATEWAY_API_KEY 后，可先打开Swagger页面，点 Authorize 填入密钥，再发送请求；API仍验证Bearer凭证。/docs、/openapi.json等文档入口不需要凭证，不包含真实密钥。
 
 默认知识 Agent 地址 `http://localhost:8100`、工程 Agent 地址 `http://localhost:8200`。PR #2 脚本默认 8001，独立服务启动时显式改端口：`uvicorn agent_api:app --host 0.0.0.0 --port 8100`。
 
@@ -99,7 +99,7 @@ GATEWAY_API_KEY 为空时仅适合本地开发；Compose 强制填写，使用 `
 | 413 | FILE_TOO_LARGE | 超过文件限制 |
 | 415 | FILE_TYPE_NOT_ALLOWED / INVALID_FILE_CONTENT | 类型不支持/内容不匹配 |
 | 422 | INVALID_INPUT / TEXT_REQUIRED / DOCUMENT_PARSE_FAILED | 参数错误/需转换/正文解析失败 |
-| 502 | AGENT_REJECTED / INVALID_AGENT_RESPONSE | 上游拒绝请求/返回格式异常 |
+| 502 | AGENT_REJECTED / INVALID_AGENT_RESPONSE | 上游拒绝或重定向/返回格式异常 |
 | 503 | AGENT_UNAVAILABLE / QUEUE_FULL | 该功能暂不可用/队列已满 |
 | 504 | AGENT_TIMEOUT | 这次有点慢，请重试 |
 

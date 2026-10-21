@@ -149,7 +149,7 @@ def test_queued_work_survives_restart_and_interrupted_work_fails(tmp_path):
         assert finished(client, running)['error']['code'] == 'WORKER_RESTARTED'
 
 
-@pytest.mark.parametrize('status,body,code', [(503, {}, 'AGENT_UNAVAILABLE'), (400, {}, 'AGENT_REJECTED'), (200, [], 'INVALID_AGENT_RESPONSE')])
+@pytest.mark.parametrize('status,body,code', [(503, {}, 'AGENT_UNAVAILABLE'), (400, {}, 'AGENT_REJECTED'), (302, {}, 'AGENT_REJECTED'), (200, [], 'INVALID_AGENT_RESPONSE')])
 def test_agent_errors(tmp_path, status, body, code):
     transport = httpx.MockTransport(lambda request: httpx.Response(status, json=body))
     with TestClient(create_app(tmp_path, transport)) as client:
@@ -182,3 +182,29 @@ def test_bad_document_task_does_not_stop_worker(tmp_path):
         assert finished(client, task['task_id'])['error']['code'] == 'DOCUMENT_PARSE_FAILED'
         code = client.post('/api/code-tests', json={'code': 'class Main {}'}).json()
         assert finished(client, code['task_id'])['status'] == 'succeeded'
+
+
+def test_missing_upload_is_404_before_enqueue(tmp_path):
+    with TestClient(create_app(tmp_path, start_worker=False)) as client:
+        uploaded = client.post('/api/uploads', files={'file': ('project.zip', archive())}).json()
+        (tmp_path / 'uploads' / (uploaded['file_id'] + '.zip')).unlink()
+        response = client.post('/api/code-tests', json={'file_id': uploaded['file_id']})
+        assert response.status_code == 404 and response.json()['error']['code'] == 'FILE_NOT_FOUND'
+
+
+def test_non_ascii_credentials_return_401(tmp_path, monkeypatch):
+    monkeypatch.setenv('GATEWAY_API_KEY', 'secret')
+    with TestClient(create_app(tmp_path, start_worker=False)) as client:
+        response = client.get('/api/tasks/missing', headers={b'Authorization': b'Bearer \xc3\xa9'})
+        assert response.status_code == 401
+
+
+def test_swagger_authorize_with_protected_api(tmp_path, monkeypatch):
+    monkeypatch.setenv('GATEWAY_API_KEY', 'test-secret')
+    with TestClient(create_app(tmp_path, start_worker=False)) as client:
+        assert client.get('/docs').status_code == 200
+        schema = client.get('/openapi.json').json()
+        assert schema['components']['securitySchemes']['HTTPBearer']['scheme'] == 'bearer'
+        assert client.get('/api/tasks/missing').status_code == 401
+        response = client.get('/api/tasks/missing', headers={'Authorization': 'Bearer test-secret'})
+        assert response.status_code == 404

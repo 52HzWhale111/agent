@@ -17,29 +17,58 @@
 5. 填写 ALERT_WEBHOOK_URL：能接收 `{service,status,time}` JSON 的 HTTPS 通知入口；这里不是直接兼容所有飞书/钉钉/邮件接口，需要通知服务或格式转换。未填写仅打印日志，**不会收到通知**。
 6. 运行 `sh infra/deploy.sh`，查看 `docker compose --env-file .env -f infra/docker-compose.yml ps`。
 7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，业务 `/business/*` 去掉此前缀后到业务后端。前端需按此前缀联调；业务接口具体字段由后端1提供。
-8. `GET /health/ready` 携带网关访问凭证，确认知识/工程服务真实可用。监控每30秒检查网关、前端、后端和两个 Agent；故障及恢复仅在状态变化时发通知，失败投递会重试。服务内置健康端点应检查必要依赖；业务 /health 应包含数据库连通性。
+8. `GET /health/ready` 携带网关访问凭证，确认知识/工程服务真实可用。监控逐项检查网关、前端、后端和两个 Agent，每轮间隔30秒（单个检查最多5秒）；故障及恢复仅在状态变化时发通知，失败投递会重试。服务内置健康端点应检查必要依赖；业务 /health 应包含数据库连通性。
 
 Caddy 持久化证书并自动续期；所有服务设置 unless-stopped，Docker 自启动后容器随之恢复。故意用 docker compose stop 停止的服务应手动 start，不能把管理员主动停止误认为重启策略失败。网关 liveness 不依赖 Agent，单个 Agent 故障不会把其他 API 一起停掉。数据库仅内网访问，网关8000只绑定服务器回环地址。
 
-## 每日备份
+## 每日备份与恢复
 
-先手动运行 `sh infra/backup.sh`。成功后在服务器配置 cron（示例服务器时区设 Asia/Shanghai，每天03:15）：
+先手动运行 `sh infra/backup.sh`。成功后生成 `backups/snapshot-<UTC时间>-<进程号>/`，含 `postgres.sql.gz` 与 `gateway/`（SQLite快照、上传文件、SHA-256清单）。整套流程完成前使用 `.partial-*` 目录；PostgreSQL导出、网关快照或校验失败时脚本返回非零，不能把.partial当成成功备份。业务DB与网关DB分别取快照，不构成跨库同一时刻的事务，恢复后需核对业务document_id与file_id等关联。
 
-```cron
-15 3 * * * cd /opt/agent && sh infra/backup.sh >> /opt/agent/backups/cron.log 2>&1
-```
+复制到宿主的网关快照会再次用只读挂载校验；成功后清理本次在容器内创建的暂存快照。失败时可能保留.partial或容器暂存目录，排查后由管理员确认再清理。备份暂不自动删除历史快照，课程期间请监测空间、保留至少最近7天并定期加密同步异机。同机磁盘损坏时同机备份无法恢复。
 
-先创建 backups 目录，再安装该条任务；定时服务启用状态需检查。脚本备份 PostgreSQL 的 pg_dump、网关 SQLite 在线快照及上传文件。失败返回非零，部分 PostgreSQL 文件用 .tmp 后缀，成功后改名；数据库保留7天，上传快照由管理员按课程要求手动清理。备份目录只对服务器管理员开放；定期加密同步异机，单机磁盘故障时同机备份无法恢复。监控 webhook 不会自动监视 cron 退出码，需在服务器另配 cron 邮件或运维告警。
+### Linux每日定时配置（准备好服务器后执行）
 
-PostgreSQL 恢复（先在演练环境验证；恢复会写入目标库）：
+提供 `infra/zhigou-backup.service` 和 `.timer`，默认项目在 `/opt/agent`，定于北京时间03:15运行，错过的计划在开机后补执行。如项目路径不同，先修改service里的WorkingDirectory和ExecStart。
 
 ```sh
-# 先停业务写入，选择经过确认的时间戳，不要把示例当实际文件名
-# gzip -dc backups/postgres-<timestamp>.sql.gz > /tmp/zhigou-restore.sql
+sudo install -m 644 infra/zhigou-backup.service infra/zhigou-backup.timer /etc/systemd/system/
+sudo systemd-analyze verify /etc/systemd/system/zhigou-backup.service /etc/systemd/system/zhigou-backup.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now zhigou-backup.timer
+sudo systemctl list-timers zhigou-backup.timer
+# 首次手动试跑并核对结果
+sudo systemctl start zhigou-backup.service
+sudo journalctl -u zhigou-backup.service -n 50 --no-pager
+```
+
+也可保留原先每天03:15的cron方式，但两者只启用一个，避免重复备份。systemd配置参考 [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html) 与 [systemd.time](https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html)。当前Windows未安装或启用此timer，服务器时钟/时区数据库和实际触发需到Linux上验收。备份失败记录在journal，暂未接入外部备份失败通知；不能把服务故障Webhook当作备份结果告警。
+
+### 网关：无需队友即可做本地备份恢复
+
+Python标准库即可运行，不需要Docker，也不会调用Agent或修改源数据：
+
+```powershell
+cd 'D:\软工\agent'
+& .\.venv\Scripts\python.exe -m infra.gateway_backup backup data/local backups/manual-demo-01
+& .\.venv\Scripts\python.exe -m infra.gateway_backup verify backups/manual-demo-01
+& .\.venv\Scripts\python.exe -m infra.gateway_backup restore backups/manual-demo-01 data/restored-demo-01
+```
+
+目标目录必须不存在；再次演练请换新名字。恢复前校验SQLite完整性、注册文件清单、大小与SHA-256；损坏、缺文件、路径穿越均拒绝恢复。备份只复制数据库快照引用的上传文件，避免把未完成上传或无关文件混进快照。源数据仍运行在data/local，恢复演练目录独立。恢复到新目录时会修正排队ZIP任务的archive_path；运行中的任务由网关启动时标记为WORKER_RESTARTED。
+
+要使用恢复数据，停止旧网关，设置 `GATEWAY_DATA_DIR` 到新目录，用uvicorn直接启动；本地快捷启动脚本固定使用data/local，不能用它切换恢复目录。生产恢复也应先停止写入、使用新目录或新卷，保留旧卷作回退，确认UID10001可写，再让网关使用恢复的数据。不要覆盖在线SQLite或盲删-wal/-shm。
+
+### PostgreSQL恢复（依赖真实业务数据库）
+
+先在演练环境恢复到空数据库；备份未带--clean，不能直接覆盖已有同名表。以下为路径模板，不要将示例时间戳当实际文件名：
+
+```sh
+# gzip -dc backups/snapshot-<时间>-<进程号>/postgres.sql.gz > /tmp/zhigou-restore.sql
 # docker compose --env-file .env -f infra/docker-compose.yml exec -T db psql -v ON_ERROR_STOP=1 -U zhigou -d zhigou < /tmp/zhigou-restore.sql
 ```
 
-恢复到空数据库；该备份没有 --clean，不能直接覆盖已有同名表。SQLite 恢复时先停止网关，把目标 /data/gateway.sqlite3、-wal、-shm 移到保留目录，再复制快照与匹配 uploads 快照，确保UID10001可写，最后启动网关。详细路径用 `docker volume inspect` 确认，禁止盲删命名卷。恢复后验证已完成任务查询、上传文件可读取、业务表记录数量。尚未做服务器恢复演练，不能勾选验收完成。
+源PostgreSQL用户、库名当前为zhigou，需与后端1确认。真实业务表恢复、演示账号、文档关联记录仍需队友数据与服务器环境验收；本地SQLite恢复成功不能代替PostgreSQL整套恢复通过。
 
 ## 日志和故障排查
 
@@ -57,4 +86,4 @@ PostgreSQL 恢复（先在演练环境验证；恢复会写入目标库）：
 | 工程服务镜像 | 待 Agent 工程交付 |
 | 前端/业务后端镜像 | 待对应同学交付 |
 | 告警接收渠道与截图 | 待部署配置与故障演练 |
-| 备份/恢复演练结果 | 待服务器验收 |
+| 备份/恢复演练结果 | 网关本地演练已通过；PostgreSQL及服务器整套待验收 |

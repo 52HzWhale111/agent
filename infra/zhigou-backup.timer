@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Zhigou backup daily at 03:15 China time
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Asia/Shanghai
+Persistent=true
+Unit=zhigou-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -3,6 +3,7 @@ WORKDIR /app
 COPY gateway/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home gateway
 COPY gateway /app/gateway
+COPY infra/gateway_backup.py /app/infra/gateway_backup.py
 RUN mkdir -p /data && chown gateway:gateway /data
 USER gateway
 ENV GATEWAY_DATA_DIR=/data PYTHONUNBUFFERED=1

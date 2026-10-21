@@ -1,4 +1,5 @@
 """HTTP checks and generic JSON webhook alerts; no Docker socket access."""
+import argparse
 import json
 import os
 import time
@@ -14,9 +15,9 @@ TARGETS = {
 }
 
 
-def check(url):
+def check(url, authenticated=True):
     try:
-        headers = {"Authorization": "Bearer " + os.getenv("GATEWAY_API_KEY", "")}
+        headers = {"Authorization": "Bearer " + os.getenv("GATEWAY_API_KEY", "")} if authenticated else {}
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=5) as response:
             return response.status < 400
     except (OSError, urllib.error.URLError):
@@ -38,16 +39,30 @@ def alert(service, healthy):
         return False
 
 
+def poll(previous, targets=None):
+    current = {}
+    for name, url in (TARGETS if targets is None else targets).items():
+        healthy = check(url, authenticated=name == "gateway")
+        current[name] = healthy
+        if name not in previous and healthy:
+            previous[name] = True
+        elif previous.get(name) != healthy and alert(name, healthy):
+            previous[name] = healthy
+    return current
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--once", action="store_true", help="Check once, print status and exit")
+    options = parser.parse_args()
+    targets = json.loads(os.environ["MONITOR_TARGETS"]) if os.getenv("MONITOR_TARGETS") else TARGETS
     previous = {}
     while True:
-        for name, url in TARGETS.items():
-            healthy = check(url)
-            if name not in previous and healthy:
-                previous[name] = True
-            elif previous.get(name) != healthy and alert(name, healthy):
-                previous[name] = healthy
-        time.sleep(30)
+        current = poll(previous, targets)
+        if options.once:
+            print(json.dumps({"services": current}))
+            raise SystemExit(0 if all(current.values()) else 1)
+        time.sleep(max(1, float(os.getenv("MONITOR_INTERVAL", "30"))))
 
 
 if __name__ == "__main__":

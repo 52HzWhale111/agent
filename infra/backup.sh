@@ -3,25 +3,29 @@ set -eu
 umask 077
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 mkdir -p backups
-stamp=$(date -u +%Y%m%dT%H%M%SZ)
+stamp=$(date -u +%Y%m%dT%H%M%SZ)-$$
 compose() { docker compose --env-file .env -f infra/docker-compose.yml "$@"; }
-tmp="backups/postgres-$stamp.sql.gz.tmp"
+partial="backups/.partial-$stamp"
+mkdir "$partial"
+tmp="$partial/postgres.sql.gz.tmp"
 # Keep pg_dump separate: a pipeline could hide its failure under POSIX sh.
-sql="backups/postgres-$stamp.sql.tmp"
+sql="$partial/postgres.sql.tmp"
 trap 'rm -f "$tmp" "$sql"' EXIT HUP INT TERM
 compose exec -T db pg_dump -U zhigou -d zhigou > "$sql"
 test -s "$sql"
 gzip -c "$sql" > "$tmp"
 gzip -t "$tmp"
-mv "$tmp" "backups/postgres-$stamp.sql.gz"
+mv "$tmp" "$partial/postgres.sql.gz"
 rm -f "$sql"
-# SQLite online backup includes committed WAL contents; uploads are immutable after creation.
-compose exec -T gateway python -c 'import sqlite3; s=sqlite3.connect("/data/gateway.sqlite3"); d=sqlite3.connect("/data/gateway-backup.sqlite3"); s.backup(d); d.close(); s.close()'
+# Snapshot includes SQLite WAL contents, registered uploads and SHA-256 checksums.
+snapshot="/data/backup-$stamp"
+compose exec -T gateway python /app/infra/gateway_backup.py backup /data "$snapshot"
 container=$(compose ps -q gateway)
-docker cp "$container:/data/gateway-backup.sqlite3" "backups/gateway-$stamp.sqlite3"
-mkdir -p "backups/uploads-$stamp"
-docker cp "$container:/data/uploads/." "backups/uploads-$stamp/"
-find backups -type f -name 'postgres-*.sql.gz' -mtime +7 -delete
-find backups -type f -name 'gateway-*.sqlite3' -mtime +7 -delete
-# Upload snapshots are retained until manually reviewed; never auto-delete student files.
+docker cp "$container:$snapshot" "$partial/gateway"
+image=$(docker inspect --format '{{.Image}}' "$container")
+docker run --rm --user 0 --mount "type=bind,source=$PWD/$partial/gateway,target=/snapshot,readonly" --entrypoint python "$image" /app/infra/gateway_backup.py verify /snapshot
+mv "$partial" "backups/snapshot-$stamp"
+# Remove only this script's verified staging copy, after publishing the host backup.
+compose exec -T gateway python -c 'import shutil,sys; shutil.rmtree(sys.argv[1])' "$snapshot"
+# Do not automatically delete student data; review retention and off-host copies in deploy.md.
 printf 'Backup complete: %s\n' "$stamp"

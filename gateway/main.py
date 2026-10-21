@@ -16,9 +16,10 @@ import uuid
 import zipfile
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 
 
@@ -114,7 +115,7 @@ def create_app(data_dir=None, transport=None, start_worker=True):
                                       headers={"X-Request-ID": request_id}, timeout=timeout), timeout)
             if response.status_code >= 500:
                 raise error(503, "AGENT_UNAVAILABLE", "该功能暂不可用")
-            if response.status_code >= 400:
+            if not response.is_success:
                 raise error(502, "AGENT_REJECTED", "Agent 未能处理该请求，请检查输入后重试")
             try:
                 result = response.json()
@@ -184,7 +185,8 @@ def create_app(data_dir=None, transport=None, start_worker=True):
                 pass
         await app.state.client.aclose()
 
-    app = FastAPI(title="知构 Agent 接入层", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="知构 Agent 接入层", version="1.0.0", lifespan=lifespan,
+                  dependencies=[Depends(HTTPBearer(auto_error=False))])
     app.state.db_path = db_path
 
     @app.middleware("http")
@@ -192,7 +194,8 @@ def create_app(data_dir=None, transport=None, start_worker=True):
         incoming = request.headers.get("X-Request-ID", "")
         request.state.request_id = incoming if re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", incoming) else uuid.uuid4().hex
         started = time.monotonic()
-        if request.url.path != "/health/live" and api_key and not secrets.compare_digest(request.headers.get("Authorization", ""), f"Bearer {api_key}"):
+        public_paths = {"/health/live", "/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
+        if request.url.path not in public_paths and api_key and not secrets.compare_digest(request.headers.get("Authorization", "").encode("utf-8"), f"Bearer {api_key}".encode("utf-8")):
             response = JSONResponse({"error": {"code": "UNAUTHORIZED", "message": "请提供有效的访问凭证"},
                                      "request_id": request.state.request_id}, status_code=401)
         else:
@@ -226,7 +229,7 @@ def create_app(data_dir=None, transport=None, start_worker=True):
     def file_path(file_id):
         with db() as conn:
             row = conn.execute("SELECT * FROM files WHERE id=?", (file_id,)).fetchone()
-        if not row:
+        if not row or not (uploads / (row["id"] + row["suffix"])).is_file():
             raise error(404, "FILE_NOT_FOUND", "文件不存在")
         return uploads / (row["id"] + row["suffix"])
 
