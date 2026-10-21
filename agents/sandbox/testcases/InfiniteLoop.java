@@ -1,1 +1,0 @@
-public class InfiniteLoop { public static void main(String[] args) { System.out.println("开始死循环..."); while(true){} } }

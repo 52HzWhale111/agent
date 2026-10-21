@@ -16,6 +16,8 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public class SandboxServer {
@@ -24,9 +26,9 @@ public class SandboxServer {
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8200), 0);
-        server.createContext("/sandbox/run", new SandboxHandler());
+        server.createContext("/sandbox/run-tests", new SandboxHandler());
         server.setExecutor(null);
-        System.out.println("沙箱服务已启动，正在监听 8200 端口...");
+        System.out.println("JUnit 沙箱服务已启动，正在监听 8200 端口...");
         server.start();
     }
 
@@ -43,20 +45,14 @@ public class SandboxServer {
                     return;
                 }
 
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-                    sendResponse(exchange, 405, "{\"error\": \"Method Not Allowed\"}");
+                String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                String[] parts = requestBody.split("---TEST---");
+                if (parts.length != 2) {
+                    sendResponse(exchange, 400, "{\"status\": \"ERROR\", \"message\": \"请使用 ---TEST--- 分隔代码\"}");
                     return;
                 }
 
-                // 1. 读取请求体中的学生代码
-                String studentCode = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-                if (studentCode.trim().isEmpty()) {
-                    sendResponse(exchange, 400, "{\"error\": \"代码不能为空\"}");
-                    return;
-                }
-
-                // 2. 执行沙箱逻辑
-                String resultJson = runSandbox(studentCode);
+                String resultJson = runJUnitSandbox(parts[0].trim(), parts[1].trim());
                 sendResponse(exchange, 200, resultJson);
 
             } catch (Exception e) {
@@ -64,20 +60,29 @@ public class SandboxServer {
             }
         }
 
-        private String runSandbox(String studentCode) {
-            // 创建临时目录（在项目的 tmp 目录下）
-            Path tmpBaseDir = Paths.get("D:/work/agent/agent/agents/sandbox/tmp");
+        private String runJUnitSandbox(String studentCode, String testCode) {
             Path taskDir = null;
             try {
+                Path tmpBaseDir = Paths.get("D:/work/agent/agent/agents/sandbox/tmp");
                 Files.createDirectories(tmpBaseDir);
                 taskDir = Files.createDirectory(tmpBaseDir.resolve(UUID.randomUUID().toString()));
-                
-                // 将接收到的代码写入 Main.java
-                Path javaFile = taskDir.resolve("Main.java");
-                Files.writeString(javaFile, studentCode, StandardCharsets.UTF_8);
 
-                // 将 Windows 路径转为 Docker 挂载路径格式
+                // 自动提取类名（默认 Main 和 MainTest）
+                String studentClass = extractClassName(studentCode, "Main");
+                String testClass = extractClassName(testCode, studentClass + "Test");
+
+                // 按正确的类名保存文件
+                Files.writeString(taskDir.resolve(studentClass + ".java"), studentCode, StandardCharsets.UTF_8);
+                Files.writeString(taskDir.resolve(testClass + ".java"), testCode, StandardCharsets.UTF_8);
+
                 String hostDir = taskDir.toAbsolutePath().toString().replace("\\", "/");
+
+                String shellScript = 
+                    "mkdir -p classes && " +
+                    "javac -encoding UTF-8 -d classes -cp /opt/tools/junit-platform-console-standalone.jar *.java && " +
+                    "java -javaagent:/opt/tools/jacocoagent.jar=destfile=jacoco.exec " +
+                    "-jar /opt/tools/junit-platform-console-standalone.jar --class-path classes --scan-class-path ; " +
+                    "java -jar /opt/tools/jacococli.jar report jacoco.exec --classfiles classes --sourcefiles . --xml coverage.xml";
 
                 String[] command = {
                     "docker", "run", "--rm",
@@ -87,55 +92,82 @@ public class SandboxServer {
                     "--network", "none",
                     "--memory", "256m",
                     "--cpus", "1",
-                    "eclipse-temurin:17-jdk-alpine",
-                    "sh", "-c", "javac -encoding UTF-8 Main.java && timeout 5 java Main"
+                    "zhigou-sandbox-jdk17:v1",
+                    "sh", "-c", shellScript
                 };
-
-                StringBuilder outputBuilder = new StringBuilder();
-                long startTime = System.currentTimeMillis();
-                int exitCode = -1;
 
                 ProcessBuilder pb = new ProcessBuilder(command);
                 pb.redirectErrorStream(true);
                 Process process = pb.start();
 
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)
-                );
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    outputBuilder.append(line).append("\n");
+                StringBuilder consoleOutput = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        consoleOutput.append(line).append("\n");
+                    }
                 }
 
-                boolean finished = process.waitFor(10, TimeUnit.SECONDS);
-                if (!finished) {
-                    process.destroyForcibly();
-                    exitCode = 137; 
+                process.waitFor(60, TimeUnit.SECONDS);
+
+                String consoleStr = consoleOutput.toString();
+                int testsSuccess = extractNumber(consoleStr, "\\[ *(\\d+) tests successful *\\]");
+                int testsFailed = extractNumber(consoleStr, "\\[ *(\\d+) tests failed *\\]");
+                
+                double lineCoverage = 0.0;
+                Path xmlPath = taskDir.resolve("coverage.xml");
+                if (Files.exists(xmlPath)) {
+                    String xml = Files.readString(xmlPath);
+                    Pattern p = Pattern.compile("<counter type=\"LINE\" missed=\"(\\d+)\" covered=\"(\\d+)\"/>");
+                    Matcher m = p.matcher(xml);
+                    if (m.find()) {
+                        int missed = Integer.parseInt(m.group(1));
+                        int covered = Integer.parseInt(m.group(2));
+                        if (missed + covered > 0) {
+                            lineCoverage = Math.round((double) covered / (missed + covered) * 1000.0) / 10.0;
+                        }
+                    }
+                }
+
+                // 智能状态判定
+                String status;
+                if (consoleStr.contains(" error: ")) {
+                    status = "COMPILE_ERROR"; // 编译报错
+                } else if (testsFailed > 0) {
+                    status = "FAILED"; // 测试没通过
+                } else if (testsSuccess > 0) {
+                    status = "SUCCESS"; // 测试全过
                 } else {
-                    exitCode = process.exitValue();
+                    status = "NO_TESTS"; // 没找到测试用例
                 }
-
-                long duration = System.currentTimeMillis() - startTime;
-                String status = (exitCode == 124) ? "TIMEOUT" : (exitCode == 0 ? "SUCCESS" : "FAILED");
 
                 return String.format(
-                    "{\"status\": \"%s\", \"exitCode\": %d, \"duration\": %d, \"output\": \"%s\"}",
-                    status, exitCode, duration, outputBuilder.toString().replace("\"", "\\\"").replace("\n", "\\n")
+                    "{\"status\": \"%s\", \"tests\": {\"success\": %d, \"failed\": %d}, \"coverage\": {\"line\": %.1f}, \"output\": \"%s\"}",
+                    status, testsSuccess, testsFailed, lineCoverage, 
+                    consoleStr.replace("\"", "\\\"").replace("\n", "\\n")
                 );
 
             } catch (Exception e) {
-                return "{\"status\": \"ERROR\", \"message\": \"沙箱执行异常: " + e.getMessage().replace("\"", "\\\"") + "\"}";
+                return "{\"status\": \"ERROR\", \"message\": \"" + e.getMessage().replace("\"", "\\\"") + "\"}";
             } finally {
-                // 3. 无论成功还是失败，最后都要清理临时目录
                 if (taskDir != null) {
                     try (Stream<Path> walk = Files.walk(taskDir)) {
                         walk.sorted(Comparator.reverseOrder())
-                            .forEach(p -> {
-                                try { Files.deleteIfExists(p); } catch (Exception ignored) {}
-                            });
+                            .forEach(p -> { try { Files.deleteIfExists(p); } catch (Exception ignored) {} });
                     } catch (Exception ignored) {}
                 }
             }
+        }
+
+        private String extractClassName(String code, String defaultName) {
+            Matcher m = Pattern.compile("public\\s+class\\s+(\\w+)").matcher(code);
+            return m.find() ? m.group(1) : defaultName;
+        }
+
+        private int extractNumber(String text, String regex) {
+            Matcher m = Pattern.compile(regex).matcher(text);
+            return m.find() ? Integer.parseInt(m.group(1)) : 0;
         }
 
         private void sendResponse(HttpExchange exchange, int statusCode, String response) throws Exception {
