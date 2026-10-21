@@ -65,3 +65,7 @@ cd backend && pip install -r requirements.txt && uvicorn main:app --reload
 - 部署说明：`docs/deploy.md`
 - 设计稿目录：`docs/design/`
 - 测试清单目录：`docs/testing/`
+
+## 后端1业务接口
+
+业务接口、数据库初始化、演示账号和测试步骤见 [后端运行与交接说明](backend/README.md)。相关需求、接口及UML数据约定由该说明统一链接。

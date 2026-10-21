@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "provenance": "知构团队自编示范选择题，依据已提供的课程知识点整理，非教材原题或教师正式试题。",
+  "questions": [
+    {
+      "id": "Q-01",
+      "kind": "question",
+      "title": "判断模块内聚性",
+      "knowledge_point_ids": ["KP-33"],
+      "content": {"prompt": "一个订单模块同时承担订单计算、视频转码和学生考勤。为了提高内聚性，应优先采取哪种做法？", "options": [{"id": "A", "text": "将职责无关的功能拆到独立模块"}, {"id": "B", "text": "把全部函数合并成一个函数"}, {"id": "C", "text": "让所有字段都公开"}, {"id": "D", "text": "删除模块间接口"}]},
+      "answer": {"correct_option": "A", "explanation": "高内聚要求模块围绕相对集中的职责组织。订单、视频与考勤的职责不同，应拆分。"}
+    },
+    {
+      "id": "Q-02", "kind": "question", "title": "降低模块耦合", "knowledge_point_ids": ["KP-34"],
+      "content": {"prompt": "业务层需要访问数据库。哪种设计更有利于降低它对具体数据库实现的耦合？", "options": [{"id": "A", "text": "在每个业务函数中重复编写连接配置"}, {"id": "B", "text": "通过明确的仓储接口访问数据"}, {"id": "C", "text": "直接修改其他模块的内部状态"}, {"id": "D", "text": "业务层依赖数据库所有内部类"}]},
+      "answer": {"correct_option": "B", "explanation": "通过稳定接口隔离具体实现，可减少数据库替换或内部修改对业务层的影响。"}
+    },
+    {
+      "id": "Q-03", "kind": "question", "title": "分支覆盖的含义", "knowledge_point_ids": ["KP-48"],
+      "content": {"prompt": "对于单个 if 判定，达到分支覆盖至少需要让哪些结果发生？", "options": [{"id": "A", "text": "只执行真分支"}, {"id": "B", "text": "只执行假分支"}, {"id": "C", "text": "判定结果为真和为假都至少出现一次"}, {"id": "D", "text": "所有循环都执行一千次"}]},
+      "answer": {"correct_option": "C", "explanation": "分支覆盖要求每个判定的各个分支都被执行。对于二分支 if，需要覆盖真和假两种结果。"}
+    },
+    {
+      "id": "Q-04", "kind": "question", "title": "识别可测的非功能需求", "knowledge_point_ids": ["KP-19"],
+      "content": {"prompt": "以下哪项属于可以量化验收的性能需求？", "options": [{"id": "A", "text": "界面尽量美观"}, {"id": "B", "text": "系统可以查询借阅记录"}, {"id": "C", "text": "用户能够修改密码"}, {"id": "D", "text": "在约定负载下，95%的查询在2秒内完成"}]},
+      "answer": {"correct_option": "D", "explanation": "D明确了负载前提、响应时间和统计比例，可以设计验收测试；B和C描述的是功能。"}
+    },
+    {
+      "id": "Q-05", "kind": "question", "title": "用例的业务目标", "knowledge_point_ids": ["KP-21"],
+      "content": {"prompt": "为图书借阅业务建模时，以下哪项最适合作为完整业务目标层次的用例？", "options": [{"id": "A", "text": "输入第三位条形码"}, {"id": "B", "text": "借阅图书"}, {"id": "C", "text": "点击确认按钮"}, {"id": "D", "text": "将光标移到输入框"}]},
+      "answer": {"correct_option": "B", "explanation": "借阅图书能表达参与者希望完成的业务目标，其余选项只是交互步骤。"}
+    },
+    {
+      "id": "Q-06", "kind": "question", "title": "包含关系箭头方向", "knowledge_point_ids": ["KP-29"],
+      "content": {"prompt": "用例A必须复用用例B的行为，采用 include 关系时，箭头应如何绘制？", "options": [{"id": "A", "text": "从A指向被包含用例B"}, {"id": "B", "text": "从B指向A"}, {"id": "C", "text": "在A和B之间画双向继承箭头"}, {"id": "D", "text": "从系统边界指向参与者"}]},
+      "answer": {"correct_option": "A", "explanation": "include依赖箭头从包含用例指向被包含的公共用例。"}
+    },
+    {
+      "id": "Q-07", "kind": "question", "title": "泛化关系的含义", "knowledge_point_ids": ["KP-26"],
+      "content": {"prompt": "以下哪组关系最适合采用类的泛化关系？", "options": [{"id": "A", "text": "订单包含订单明细"}, {"id": "B", "text": "学生选修课程"}, {"id": "C", "text": "汽车是一种交通工具"}, {"id": "D", "text": "打印服务使用网络"}]},
+      "answer": {"correct_option": "C", "explanation": "泛化表达一般与特殊的is-a关系。汽车是交通工具的一种，其他选项属于组成、关联或使用关系。"}
+    },
+    {
+      "id": "Q-08", "kind": "question", "title": "组合关系的图形", "knowledge_point_ids": ["KP-27"],
+      "content": {"prompt": "UML类图中，组合关系的实心菱形应靠近哪一侧？", "options": [{"id": "A", "text": "随机放置"}, {"id": "B", "text": "部分一侧"}, {"id": "C", "text": "连线中点"}, {"id": "D", "text": "整体一侧"}]},
+      "answer": {"correct_option": "D", "explanation": "组合关系的实心菱形标在整体端，表示整体对部分的强拥有关系。"}
+    },
+    {
+      "id": "Q-09", "kind": "question", "title": "选择适用的过程模型", "knowledge_point_ids": ["KP-09"],
+      "content": {"prompt": "哪种项目条件相对更适合采用阶段顺序明确的瀑布式开发？", "options": [{"id": "A", "text": "目标每天改变，用户尚不清楚需要什么"}, {"id": "B", "text": "需求稳定清晰，阶段交付和审核要求明确"}, {"id": "C", "text": "没有任何需求或验收标准"}, {"id": "D", "text": "只需要立即演示交互创意"}]},
+      "answer": {"correct_option": "B", "explanation": "需求相对稳定且阶段审核要求明确时，顺序式过程更易计划。瀑布模型也可以反馈修正，并非物理意义上不可回退。"}
+    },
+    {
+      "id": "Q-10", "kind": "question", "title": "理解敏捷价值观", "knowledge_point_ids": ["KP-14"],
+      "content": {"prompt": "敏捷宣言强调可运行的软件高于详尽的文档，合理理解是哪一项？", "options": [{"id": "A", "text": "完全禁止编写文档"}, {"id": "B", "text": "只写文档而不交付软件"}, {"id": "C", "text": "重视可运行软件，同时保留有用且必要的文档"}, {"id": "D", "text": "不用与用户沟通"}]},
+      "answer": {"correct_option": "C", "explanation": "价值排序不代表右项毫无价值。文档仍应服务于沟通、维护与交付。"}
+    },
+    {
+      "id": "Q-11", "kind": "question", "title": "单元测试的对象", "knowledge_point_ids": ["KP-43"],
+      "content": {"prompt": "单元测试主要针对哪一层次的对象？", "options": [{"id": "A", "text": "函数或类等最小可测试单元"}, {"id": "B", "text": "整个组织的年度预算"}, {"id": "C", "text": "所有外部系统的联合验收"}, {"id": "D", "text": "生产服务器的物理供电线路"}]},
+      "answer": {"correct_option": "A", "explanation": "单元测试聚焦最小可测试单元，依赖可根据测试目标进行隔离。"}
+    },
+    {
+      "id": "Q-12", "kind": "question", "title": "黑盒测试的依据", "knowledge_point_ids": ["KP-45"],
+      "content": {"prompt": "设计黑盒测试时，主要依据什么选择输入与预期结果？", "options": [{"id": "A", "text": "源代码中变量的字母顺序"}, {"id": "B", "text": "开发者个人偏好"}, {"id": "C", "text": "机器的桌面壁纸"}, {"id": "D", "text": "需求规格和外部行为约定"}]},
+      "answer": {"correct_option": "D", "explanation": "黑盒测试从外部验证系统是否满足需求和接口约定，不依赖内部实现结构。"}
+    },
+    {
+      "id": "Q-13", "kind": "question", "title": "边界值测试数据", "knowledge_point_ids": ["KP-49"],
+      "content": {"prompt": "某字段只允许1至100的整数。哪组数据更能检查上下边界及其外侧？", "options": [{"id": "A", "text": "20、30、40、50"}, {"id": "B", "text": "0、1、100、101"}, {"id": "C", "text": "50、50、50、50"}, {"id": "D", "text": "10、25、60、80"}]},
+      "answer": {"correct_option": "B", "explanation": "0和101处于合法区间之外，1和100是上下边界，可发现常见边界判定错误。"}
+    },
+    {
+      "id": "Q-14", "kind": "question", "title": "配置管理的目的", "knowledge_point_ids": ["KP-52"],
+      "content": {"prompt": "团队为什么要使用Git并保留清晰的提交记录？", "options": [{"id": "A", "text": "使每个人都无法知道代码是谁修改的"}, {"id": "B", "text": "替代全部需求分析工作"}, {"id": "C", "text": "标识和跟踪变更，支持协作与版本恢复"}, {"id": "D", "text": "保证代码从此不再出现缺陷"}]},
+      "answer": {"correct_option": "C", "explanation": "版本控制支持变更的标识、追踪和恢复，但不能替代需求工作，也不能保证没有缺陷。"}
+    },
+    {
+      "id": "Q-15", "kind": "question", "title": "识别软件维护类型", "knowledge_point_ids": ["KP-59"],
+      "content": {"prompt": "原有软件因操作系统升级而进行兼容性修改，主要属于哪类维护？", "options": [{"id": "A", "text": "适应性维护"}, {"id": "B", "text": "改正性维护"}, {"id": "C", "text": "完善性维护"}, {"id": "D", "text": "需求获取"}]},
+      "answer": {"correct_option": "A", "explanation": "适应性维护使软件适应变化的环境。修复已知缺陷通常归为改正性维护，新增改进功能通常归为完善性维护。"}
+    },
+    {
+      "id": "Q-16", "kind": "question", "title": "集中模块职责", "knowledge_point_ids": ["KP-33"],
+      "content": {"prompt": "哪种模块划分更符合高内聚原则？", "options": [{"id": "A", "text": "按函数名称的首字母划分"}, {"id": "B", "text": "把完成同一业务职责的逻辑放在一起"}, {"id": "C", "text": "把不相关功能随机放进公共工具类"}, {"id": "D", "text": "按照作者学号分配类的功能"}]},
+      "answer": {"correct_option": "B", "explanation": "围绕同一业务职责组织逻辑，能使模块内部元素具有更强关联，便于理解和修改。"}
+    },
+    {
+      "id": "Q-17", "kind": "question", "title": "识别修改传播", "knowledge_point_ids": ["KP-34"],
+      "content": {"prompt": "修改模块A的内部数据结构后，十多个无关模块都必须改动。这个现象主要提示什么问题？", "options": [{"id": "A", "text": "模块间依赖过强，耦合可能过高"}, {"id": "B", "text": "模块间完全没有依赖"}, {"id": "C", "text": "测试一定已经完全覆盖"}, {"id": "D", "text": "数据库容量太小"}]},
+      "answer": {"correct_option": "A", "explanation": "内部变动大范围传播，通常说明其他模块依赖了实现细节，应检查接口和信息隐藏。"}
+    },
+    {
+      "id": "Q-18", "kind": "question", "title": "区分分支覆盖与条件覆盖", "knowledge_point_ids": ["KP-48"],
+      "content": {"prompt": "针对 if (A || B)，某测试集让整体判定出现真、假两种结果。仅据此可以确定什么？", "options": [{"id": "A", "text": "已经覆盖全部执行路径"}, {"id": "B", "text": "A与B所有真假组合都已经出现"}, {"id": "C", "text": "该判定的两个分支已覆盖，但不能据此断定所有条件组合已覆盖"}, {"id": "D", "text": "程序中不存在缺陷"}]},
+      "answer": {"correct_option": "C", "explanation": "分支覆盖考察整体判定结果，不能等同于条件组合覆盖，也不能证明程序没有缺陷。"}
+    }
+  ]
+}
