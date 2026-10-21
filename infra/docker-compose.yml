@@ -1,0 +1,117 @@
+name: zhigou
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      GATEWAY_DATA_DIR: /data
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
+      KNOWLEDGE_AGENT_URL: http://knowledge:8100
+      SANDBOX_AGENT_URL: http://sandbox:8200
+      QA_TIMEOUT: "30"
+      DOC_REVIEW_TIMEOUT: "60"
+      CODE_RUN_TIMEOUT: "120"
+      MAX_UPLOAD_MB: "20"
+    volumes:
+      - gateway-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+
+  # Real team images are required; no placeholder Agent is presented as a finished service.
+  knowledge:
+    image: ${KNOWLEDGE_IMAGE:?Set the implemented knowledge Agent image}
+    restart: unless-stopped
+    environment:
+      PORT: "8100"
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+    logging: *logging
+
+  sandbox:
+    image: ${SANDBOX_IMAGE:?Set the implemented sandbox Agent image}
+    restart: unless-stopped
+    environment:
+      PORT: "8200"
+    volumes:
+      - gateway-data:/data:ro
+    logging: *logging
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set the frontend image serving HTTP on 3000}
+    restart: unless-stopped
+    logging: *logging
+
+  backend:
+    image: ${BACKEND_IMAGE:?Set the backend image serving HTTP on 8000}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://zhigou:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zhigou
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zhigou
+      POSTGRES_DB: zhigou
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhigou -d zhigou"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  edge:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to a public DNS name}
+      ACME_EMAIL: ${ACME_EMAIL:?Set certificate contact email}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+  monitor:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python", "-u", "/monitor/monitor.py"]
+    environment:
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - ./monitor.py:/monitor/monitor.py:ro
+    logging: *logging
+
+volumes:
+  gateway-data:
+  postgres-data:
+  caddy-data:
+  caddy-config:
