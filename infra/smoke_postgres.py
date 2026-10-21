@@ -44,7 +44,8 @@ def main():
         print('PASS ' + label, flush=True)
     def wait_database():
         for _ in range(40):
-            result = subprocess.run(docker + ['exec', name, 'pg_isready', '-U', 'zhigou'], capture_output=True, timeout=10)
+            # The image's init-only server accepts Unix sockets before its final restart, but no TCP.
+            result = subprocess.run(docker + ['exec', name, 'pg_isready', '-h', '127.0.0.1', '-U', 'zhigou', '-d', 'zhigou'], capture_output=True, timeout=10)
             if result.returncode == 0:
                 return
             time.sleep(.5)
