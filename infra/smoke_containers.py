@@ -81,9 +81,12 @@ def main():
                 time.sleep(.25)
             response = client.get(knowledge + '/health')
             assert response.status_code == 503 and response.json()['knowledge_points'] == 60
+            assert response.json()['supplemental_points'] == 2
             response = client.post(knowledge + '/qa', json={'question': '什么是基线'})
             assert response.status_code == 503 and response.json()['detail']['code'] == 'MODEL_NOT_CONFIGURED'
-            report['checks'].append('packaged knowledge API loads 60 points and templates; absent credentials rejected')
+            response = client.post(knowledge + '/qa', json={'question': '概要设计和详细设计有什么区别'})
+            assert response.status_code == 503 and response.json()['detail']['code'] == 'MODEL_NOT_CONFIGURED'
+            report['checks'].append('packaged knowledge API loads 60 original + 2 supplemental points and templates; absent credentials rejected')
             print('PASS packaged knowledge API: no placeholder success without credentials', flush=True)
             report['status'] = 'passed'
     finally:

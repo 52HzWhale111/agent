@@ -38,6 +38,7 @@ class ReviewQuery(BaseModel):
     file_id: str | None = None
     document_id: str | None = None
     doc_type: Literal["srs", "hld", "test_report"]
+    scope: Literal["auto", "full", "excerpt"] | None = None
 
 
 class CodeQuery(BaseModel):

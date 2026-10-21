@@ -3,6 +3,7 @@ WORKDIR /app
 COPY agents/knowledge/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home knowledge
 COPY agents/knowledge /app/agents/knowledge
+COPY knowledge-base/01_知识点 /app/knowledge-base/01_知识点
 COPY knowledge-base/03_文档模板 /app/knowledge-base/03_文档模板
 USER knowledge
 ENV PYTHONUNBUFFERED=1

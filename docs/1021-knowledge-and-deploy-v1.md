@@ -8,7 +8,7 @@
 |---|---|---|
 | 知识Agent | 解出原10个文件，补真实HTTP模型调用、检索、Prompt填充、JSON/出处校验及错误处理 | `agents/knowledge/README.md` |
 | 知识模型 | DeepSeek-V4.1-Flash-1017官方别名 `deepseek-flash`；本机已配置并跑通3条真实模型链路 | `data/local/knowledge.env`（忽略，不提交） |
-| 知识案例 | 20条真实接口调用完成；发现资料缺口、预期清单冲突及评审误报，未作语义通过承诺 | `docs/1021-knowledge-validation-v1.md` |
+| 知识案例 | 已补两项资料，增加范围、证据与结果复核；原20案例及4份正常对照已加入真实复测 | `docs/1021-knowledge-fixes-v1.md` |
 | 自动测试 | 69项通过，含新增6项知识协议测试；模型替身仅证明协议与异常处理 | `python -m pytest backend/tests gateway/tests -q` |
 | PostgreSQL | 真实17.11数据库完成7项检查：初始化、权限/原文件、图版本、答题幂等、重启、备份校验、恢复业务数据一致 | `python -m infra.smoke_postgres --wsl-distro Debian` |
 | 沙箱服务化 | 新增HTTP API Dockerfile，与执行镜像分开；Compose内私有访问、相同路径工作目录及受限执行容器 | `agents/sandbox/Dockerfile.server` |
@@ -61,7 +61,7 @@ Windows挂载盘若出现`failed to xattr .pytest_cache`，将**干净Git工作�
 | 责任方 | 仍需提供或执行 |
 |---|---|
 | 模型账号负责人 | 本机已配置并完成真实调用；上线时单独配置服务器凭据与额度 |
-| 知识Agent与测试 | 已有20条实际响应，需按验证记录修资料缺口、统一DEF标准、复核出处与误报；补定制前后同输入对照与人工验收 |
+| 知识Agent与测试 | 已有补充资料和定向误报修复；审阅来源与分类，按实际DEF清单复核结果，补通用提示基线与人工验收 |
 | 前端1/前端2 | 可运行代码或镜像、构建说明、API地址配置；联调JWT、任务轮询、文档错误、UML版本冲突和结果展示 |
 | Agent工程 | 图代码一致性接口、细粒度分支定位及约定范围内的项目样例；ZIP执行仍不支持，网关明确拒绝 |
 | 组长/部署负责人 | 云服务器、登录方式、域名及通知接收渠道；审阅后合并当前PR |

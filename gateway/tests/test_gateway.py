@@ -38,7 +38,7 @@ def test_pr2_routes_and_durable_tasks(tmp_path, monkeypatch):
     with TestClient(app) as client:
         assert client.post('/api/qa', json={'question': 'cohesion'}, headers={'X-Request-ID': 'trace-1'}).status_code == 200
         assert client.post('/api/requirements/analyze', json={'description': 'library'}).status_code == 200
-        review = client.post('/api/reviews', json={'content': 'SRS text', 'doc_type': 'srs'})
+        review = client.post('/api/reviews', json={'content': 'SRS text', 'doc_type': 'srs', 'scope': 'excerpt'})
         assert review.status_code == 202
         result = finished(client, review.json()['task_id'])
         assert result['status'] == 'succeeded' and result['progress'] == 100
@@ -48,7 +48,7 @@ def test_pr2_routes_and_durable_tasks(tmp_path, monkeypatch):
         assert client.post('/api/consistency', json={'code': 'class Main {}', 'diagram': {}}).status_code == 200
         assert [entry[0] for entry in calls] == ['/qa', '/analyze_requirement', '/review_document', '/run_tests', '/check_consistency']
         assert calls[0][2] == 'trace-1'
-        assert calls[2][1] == {'content': 'SRS text', 'doc_type': 'srs'}
+        assert calls[2][1] == {'content': 'SRS text', 'doc_type': 'srs', 'scope': 'excerpt'}
     with TestClient(create_app(tmp_path, httpx.MockTransport(agent))) as client:
         assert client.get('/api/tasks/' + result['task_id']).json()['status'] == 'succeeded'
     assert 'trace-1' in (tmp_path / 'logs/gateway.log').read_text(encoding='utf-8')

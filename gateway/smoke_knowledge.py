@@ -35,7 +35,7 @@ def main():
         document.save(content)
         uploaded = client.post(url + '/api/uploads', headers=headers, files={'file': ('knowledge-review.docx', content.getvalue())})
         assert uploaded.status_code == 201, uploaded.text
-        response = client.post(url + '/api/reviews', headers=headers, json={'document_id': uploaded.json()['document_id'], 'doc_type': 'srs'})
+        response = client.post(url + '/api/reviews', headers=headers, json={'document_id': uploaded.json()['document_id'], 'doc_type': 'srs', 'scope': 'excerpt'})
         assert response.status_code == 202, response.text
         task_id = response.json()['task_id']
         for _ in range(35):

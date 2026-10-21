@@ -1,0 +1,22 @@
+[
+  {
+    "kp_id": "SUP-01",
+    "title": "概要设计与详细设计",
+    "chapter": "外部补充资料：软件设计",
+    "definition": "概要设计关注系统的高层结构：有哪些子系统或模块，它们如何交互以及满足哪些质量约束。详细设计把架构细化为可编码的类、函数、接口、数据结构和算法。二者是不同抽象层次，详细设计应与架构和需求保持可追溯；高风险部分可以交错开展，不必机械地认为绝不能重叠。",
+    "example": "自编教学类比：概要设计确定借阅系统分为查询、借还、账户模块及其接口；详细设计再确定借书方法的参数、借阅记录结构和库存校验算法。",
+    "common_mistake": "将数据库等同于整个概要设计，或者把详细设计理解为只能在编码后补写。",
+    "keywords": ["概要设计", "详细设计", "架构设计", "architectural design", "detailed design"],
+    "source": "NASA Software Engineering Handbook Ver D, SWE-057 §3.2（中文释义，核对日期2026-10-21）：https://swehb.nasa.gov/spaces/SWEHBVD/pages/102695442/SWE-057+-+Software+Architecture"
+  },
+  {
+    "kp_id": "SUP-02",
+    "title": "软件测试与软件质量保证的区别",
+    "chapter": "外部补充资料：软件质量",
+    "definition": "软件测试通过选定的有限测试用例运行被测系统，检查行为是否符合预期，提供质量与缺陷证据。软件质量保证（SQA）还包括过程保证、产品保证、评审和审计等有计划的活动，不能等同于测试。测试是质量控制和验证确认的重要活动；测试策划、设计可从需求阶段开始并贯穿生命周期，不能概括为只在编码完成后进行的事后检查。",
+    "example": "自编教学类比：测试检查借书后库存是否正确；质量保证还检查需求评审、开发流程和测试证据是否符合团队约定。",
+    "common_mistake": "把SQA等同于最后测一遍，或者认为测试能证明软件没有任何缺陷。",
+    "keywords": ["软件测试", "SQA", "sqa", "质量保证", "测试与质量", "测试和质量"],
+    "source": "IEEE Computer Society, SWEBOK Guide v4.0a, 第5章引言及第12章§3、§3.4.4（PDF第117、255、258页，中文释义，核对日期2026-10-21）：https://ieeecs-media.computer.org/media/education/swebok/swebok-v4.pdf"
+  }
+]

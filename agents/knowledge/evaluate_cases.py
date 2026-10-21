@@ -3,6 +3,7 @@
 HTTP success is recorded separately from semantic grading. No provider key is
 read here; configure and start the knowledge service first.
 """
+import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -14,6 +15,10 @@ import httpx
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', default='data/local/knowledge-cases.json')
+    parser.add_argument('--with-review-controls', action='store_true')
+    options = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     cases_dir = root / "agents/knowledge/02_测试案例集"
     cases = []
@@ -32,27 +37,38 @@ def main():
         cases.append((f"DR-{number:02d}", "/review_document",
                       {"content": path.read_text(encoding="utf-8"), "doc_type": kind}))
     assert len(cases) == 20
+    if options.with_review_controls:
+        controls = json.loads((cases_dir.parent / 'review_controls.json').read_text(encoding='utf-8'))
+        for control in controls:
+            cases.append((control['case_id'], '/review_document',
+                          {k: control[k] for k in ('content', 'doc_type', 'scope')}))
     report = {"started_at": datetime.now(timezone.utc).isoformat(),
-              "model_alias": "deepseek-flash", "semantic_grading": "not_automatically_graded",
+              "expected_model_alias": "deepseek-flash", "semantic_grading": "not_automatically_graded",
               "results": []}
-    destination = root / "data/local/knowledge-cases.json"
+    destination = root / options.output
     destination.parent.mkdir(parents=True, exist_ok=True)
     with httpx.Client(base_url="http://127.0.0.1:8100", trust_env=False, timeout=60) as client:
         ready = client.get("/health")
         ready.raise_for_status()
         assert ready.json()["model_configured"]
+        report['service_health'] = ready.json()
         for case_id, route, payload in cases:
             started = time.monotonic()
             response = client.post(route, json=payload)
             elapsed = round(time.monotonic() - started, 2)
-            report["results"].append({"case_id": case_id, "route": route,
+            entry = {"case_id": case_id, "route": route,
                 "input_sha256": hashlib.sha256(json.dumps(payload, ensure_ascii=False,
                     sort_keys=True).encode()).hexdigest(), "http_status": response.status_code,
                 "elapsed_seconds": elapsed, "request_id": response.headers.get("X-Request-ID"),
-                "response": response.json()})
+                "response": response.json()}
+            if case_id.startswith('DR-'):
+                rubric = next(defects.glob(f"DEF-{[1, 3, 4, 5, 6, 10][int(case_id[-2:]) - 1]:02d}_标准清单.md"))
+                entry['rubric_file'] = rubric.relative_to(root).as_posix()
+                entry['rubric_sha256'] = hashlib.sha256(rubric.read_bytes()).hexdigest()
+            report["results"].append(entry)
             destination.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"{case_id}: HTTP {response.status_code}, {elapsed}s", flush=True)
-    print("20 responses saved locally. Compare with source rubrics before reporting semantic pass rates.")
+    print(f"{len(cases)} responses saved locally. Compare with source rubrics before reporting semantic pass rates.")
 
 
 if __name__ == "__main__":
