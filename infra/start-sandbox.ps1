@@ -34,9 +34,10 @@ if ([System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().
     throw 'Port 8200 is occupied. Stop only the recorded sandbox first: infra/stop-local.ps1 -Service sandbox'
 }
 $previousEnvironment = @{}
-foreach ($key in @('Path','JAVA_HOME','SANDBOX_TMP_DIR','SANDBOX_WSL_DISTRO','WSL_UTF8')) { $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
+foreach ($key in @('Path','JAVA_HOME','SANDBOX_TMP_DIR','SANDBOX_WSL_DISTRO','SANDBOX_BIND_HOST','WSL_UTF8')) { $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
 $previousConsoleEncoding = [Console]::OutputEncoding
 $process = $null
+$wslKeepAlive = $null
 $stateFile = Join-Path $runDir 'processes.json'
 $existing = if (Test-Path -LiteralPath $stateFile) { Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json } else { @() }
 $existing = @($existing | Where-Object { $_.name -ne 'sandbox' })
@@ -45,11 +46,14 @@ try {
     $env:Path = (Split-Path -Parent $java) + ';' + (Split-Path -Parent $docker) + ';' + $env:Path
     $env:SANDBOX_TMP_DIR = Join-Path $sandboxDir 'tmp'
     $env:SANDBOX_WSL_DISTRO = $WslDistro
+    $env:SANDBOX_BIND_HOST = '127.0.0.1'
     if ($WslDistro) {
         $env:WSL_UTF8 = '1'
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         & $docker --distribution $WslDistro --user root --exec /usr/sbin/service docker start
         if ($LASTEXITCODE -ne 0) { throw 'Unable to start Docker Engine in WSL.' }
+        # Docker/systemd alone does not keep WSL alive after the last Windows client exits.
+        $wslKeepAlive = Start-Process -FilePath $docker -ArgumentList @('--distribution',$WslDistro,'--exec','sleep','infinity') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $runDir 'sandbox-wsl.stdout.log') -RedirectStandardError (Join-Path $runDir 'sandbox-wsl.stderr.log')
     }
     # Windows PowerShell 5.1 treats a WSL advisory on stderr as NativeCommandError.
     # Check the real command exit code, rather than failing on an advisory.
@@ -82,11 +86,13 @@ try {
     }
     if (-not $ready) { throw 'Real sandbox failed to start. See data/local/sandbox.stderr.log.' }
     $record = @{name='sandbox'; pid=$process.Id; module='com.zhigou.SandboxServerLocal'; port=8200}
+    if ($wslKeepAlive) { $record.wsl_keepalive_pid = $wslKeepAlive.Id }
     ConvertTo-Json -InputObject @($existing + $record) | Set-Content -LiteralPath $stateFile -Encoding UTF8
     $verification = if ($WslDistro) { 'python -m gateway.smoke_sandbox --wsl-distro ' + $WslDistro } else { 'python -m gateway.smoke_sandbox' }
     Write-Output ('REAL Docker sandbox listening on 127.0.0.1:8200. Verify: ' + $verification)
 } catch {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    if ($wslKeepAlive -and -not $wslKeepAlive.HasExited) { Stop-Process -Id $wslKeepAlive.Id -Force }
     throw
 } finally {
     foreach ($key in $previousEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key, $previousEnvironment[$key], 'Process') }

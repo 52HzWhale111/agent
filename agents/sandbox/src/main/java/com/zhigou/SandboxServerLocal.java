@@ -21,13 +21,18 @@ public class SandboxServerLocal {
     static final int OUTPUT_LIMIT = 65536;
 
     public static void main(String[] args) throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 8200), 0);
+        String host = System.getenv().getOrDefault("SANDBOX_BIND_HOST", "127.0.0.1");
+        HttpServer server = HttpServer.create(new InetSocketAddress(host, 8200), 0);
         server.createContext("/sandbox/run-tests", SandboxServerLocal::handle);
         server.start();
-        System.out.println("Real Docker/JUnit sandbox: http://127.0.0.1:8200/sandbox/run-tests");
+        System.out.println("Real Docker/JUnit sandbox: http://" + host + ":8200/sandbox/run-tests");
     }
 
     static void handle(HttpExchange exchange) throws java.io.IOException {
+        String incoming = exchange.getRequestHeaders().getFirst("X-Request-ID");
+        String requestId = incoming != null && incoming.matches("[A-Za-z0-9_-]{1,64}") ? incoming : UUID.randomUUID().toString();
+        long started = System.nanoTime();
+        System.out.println("sandbox request_id=" + requestId + " event=started method=" + exchange.getRequestMethod());
         try {
             if (exchange.getRequestMethod().equals("OPTIONS")) {
                 exchange.getResponseHeaders().set("Allow", "POST, OPTIONS");
@@ -49,7 +54,11 @@ public class SandboxServerLocal {
                 return;
             }
             respond(exchange, 200, run(parts[0].trim(), parts[1].trim()));
+        } catch (java.io.IOException | RuntimeException e) {
+            System.err.println("sandbox request_id=" + requestId + " error=" + e);
+            throw e;
         } finally {
+            System.out.println("sandbox request_id=" + requestId + " duration_ms=" + (System.nanoTime() - started) / 1000000);
             exchange.close();
         }
     }
@@ -74,7 +83,8 @@ public class SandboxServerLocal {
                 + "javac -encoding UTF-8 -d classes '" + studentClass + ".java' || exit 10; "
                 + "javac -encoding UTF-8 -d test-classes -cp classes:/opt/tools/junit-platform-console-standalone.jar '" + testClass + ".java' || exit 10; "
                 // A fixed session ID avoids JaCoCo's hostname DNS lookup in a networkless container.
-                + "timeout -s KILL 5 java '-javaagent:/opt/tools/jacocoagent.jar=destfile=jacoco.exec,sessionid=" + name
+                // Short-lived JUnit tasks use Tier1 to reduce JIT startup cost within the 5s budget.
+                + "timeout -s KILL 5 java -XX:TieredStopAtLevel=1 '-javaagent:/opt/tools/jacocoagent.jar=destfile=jacoco.exec,sessionid=" + name
                 + ",excludes=org.junit.*:org.apiguardian.*:org.opentest4j.*' "
                 + "-jar /opt/tools/junit-platform-console-standalone.jar execute --disable-ansi-colors --details=summary "
                 + "--class-path classes:test-classes --scan-class-path --fail-if-no-tests; test_exit=$?; "
@@ -86,7 +96,7 @@ public class SandboxServerLocal {
                 "--cpus", "1", "--pids-limit", "64", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                 "--read-only", "--tmpfs", "/tmp:rw,nosuid,noexec,size=64m", "-e", "LANG=C.UTF-8",
                 "--mount", "type=bind,source=" + dockerPath(task) + ",target=/app", "-w", "/app",
-                "zhigou-sandbox-jdk17:v1", "sh", "-c", script).redirectErrorStream(true).start();
+                System.getenv().getOrDefault("SANDBOX_EXECUTION_IMAGE", "zhigou-sandbox-jdk17:v1"), "sh", "-c", script).redirectErrorStream(true).start();
             StringBuffer output = new StringBuffer();
             Process active = process;
             Thread reader = new Thread(() -> {

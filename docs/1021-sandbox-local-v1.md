@@ -32,6 +32,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File infra/start-sandbox.ps1 -Wsl
 
 停止本项目全部HTTP服务：`powershell -NoProfile -ExecutionPolicy Bypass -File infra/stop-local.ps1`。仅重启真实沙箱时，先加 `-Service sandbox` 停止，再执行 `start-sandbox.ps1 -WslDistro Debian`；无需重启业务或网关。进程记录兼容Windows PowerShell 5.1，替换沙箱记录后不会保留旧模拟PID。
 
+WSL模式下，启动脚本另保存项目级隐藏保活进程，防止Linux后台Docker在Windows客户端退出后随发行版被停掉；`stop-local.ps1 -Service sandbox`同时回收该保活进程。HTTP API容器打包、知识模型接入及PostgreSQL演练见 [部署补充](1021-knowledge-and-deploy-v1.md)。
+
 ## 真实验证结果
 
 2026-10-21 19:22（北京时间）执行的8组场景全部通过，使用真实Docker，不接受 `mock=true`：
@@ -56,6 +58,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File infra/start-sandbox.ps1 -Wsl
 - 临时目录由启动脚本指定，Windows路径经wslpath转换后挂入容器，不依赖队友电脑的固定路径；HTTP仅监听127.0.0.1:8200。
 - 测试JVM使用5秒墙钟限制，Docker进程最多等待60秒，之后按唯一容器名限时回收。输出线程持续消费日志，最多保留末尾65536个字符，避免先读输出再等待造成无限阻塞。
 - 显式使用任务UUID作为JaCoCo sessionid。原自动会话标识会调用主机名解析，在无网络容器内额外等待约5秒；修复后仍保持5秒上限。JaCoCo不插桩JUnit框架，覆盖率报告只统计学生编译目录并取汇总LINE计数。
+- 短时JUnit任务使用 `-XX:TieredStopAtLevel=1` 减少JIT启动成本，不放宽5秒墙钟限制。请求日志沿用X-Request-ID并记录耗时，便于区分接口、编译与测试问题。
 - 请求最多1MiB；只接收代码和测试文本，处理JSON控制字符和小数格式。ZIP、图代码一致性仍未实现，不作已完成声明。
 
 协议仍是 `POST /sandbox/run-tests`、text/plain、`代码 + 换行---TEST---换行 + 测试`，返回status/tests/coverage/output。OPTIONS 204只证明HTTP路由可达；必须执行上述真实测试才算验证执行器。

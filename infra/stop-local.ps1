@@ -6,6 +6,12 @@ if (-not (Test-Path -LiteralPath $stateFile)) { Write-Output 'No local process r
 $records = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
 foreach ($record in $records) {
     if ($Service -ne 'all' -and $Service -ne $record.name) { continue }
+    if ($record.wsl_keepalive_pid) {
+        $holder = Get-CimInstance Win32_Process -Filter "ProcessId = $($record.wsl_keepalive_pid)"
+        if ($holder -and $holder.Name -eq 'wsl.exe' -and $holder.CommandLine.Contains('sleep infinity')) {
+            Stop-Process -Id $holder.ProcessId -Force
+        }
+    }
     $candidate = Get-CimInstance Win32_Process -Filter "ProcessId = $($record.pid)"
     if (-not $candidate) { continue }
     # Refuse to stop an unrelated process if Windows has recycled its PID.

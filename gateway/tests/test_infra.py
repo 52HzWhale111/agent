@@ -32,11 +32,16 @@ def test_monitor_checks_and_webhook(monkeypatch, capsys):
 def test_compose_structure():
     config = yaml.safe_load(Path('infra/docker-compose.yml').read_text(encoding='utf-8'))
     services = config['services']
-    assert set(services) == {'gateway', 'knowledge', 'sandbox', 'frontend', 'backend', 'db', 'edge', 'monitor'}
-    assert all(item['restart'] == 'unless-stopped' for item in services.values())
+    assert set(services) == {'gateway', 'knowledge', 'sandbox', 'sandbox-execution', 'frontend', 'backend', 'db', 'edge', 'monitor'}
+    assert services['sandbox-execution']['profiles'] == ['build']
+    assert all(item['restart'] == 'unless-stopped' for name, item in services.items() if name != 'sandbox-execution')
     assert services['backend']['depends_on']['db']['condition'] == 'service_healthy'
     assert services['gateway']['ports'] == ['127.0.0.1:8000:8000']
-    assert services['sandbox']['volumes'] == ['gateway-data:/data:ro']
+    assert 'ports' not in services['sandbox']
+    assert '/var/run/docker.sock:/var/run/docker.sock:ro' in services['sandbox']['volumes']
+    assert services['sandbox']['read_only'] and services['sandbox']['cap_drop'] == ['ALL']
+    assert services['sandbox']['networks'] == ['sandbox-internal']
+    assert config['networks']['sandbox-internal']['internal']
     assert 'ports' not in services['db']
 
 

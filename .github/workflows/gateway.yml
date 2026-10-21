@@ -1,9 +1,9 @@
 name: Gateway checks
 on:
   push:
-    paths: ['gateway/**', 'backend/**', 'agents/sandbox/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'agents/**', 'infra/**', '.github/workflows/gateway.yml']
   pull_request:
-    paths: ['gateway/**', 'backend/**', 'agents/sandbox/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'agents/**', 'infra/**', '.github/workflows/gateway.yml']
 permissions:
   contents: read
 jobs:
@@ -21,9 +21,14 @@ jobs:
       - run: mvn -B -ntp -f agents/sandbox/pom.xml compile
       - run: pip install -r gateway/requirements-dev.txt
       - run: python -m pytest backend/tests gateway/tests -q
+      - run: python -m infra.smoke_postgres
       - run: sh -n infra/deploy.sh infra/backup.sh infra/install-docker-wsl.sh
       - run: systemd-analyze calendar '*-*-* 03:15:00 Asia/Shanghai'
       - run: docker build -f gateway/Dockerfile -t zhigou-gateway:test .
       - run: docker build -f backend/Dockerfile -t zhigou-backend:test .
+      - run: docker build -f agents/knowledge/Dockerfile -t zhigou-knowledge:local .
+      - run: docker build -f agents/sandbox/Dockerfile.server -t zhigou-sandbox-api:local .
+      - run: docker build -t zhigou-sandbox-jdk17:v1 agents/sandbox
+      - run: python -m infra.smoke_containers
       - run: docker compose --env-file infra/ci.env -f infra/docker-compose.yml config --quiet
       - run: docker run --rm -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost -e ACME_EMAIL=test@example.com caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile

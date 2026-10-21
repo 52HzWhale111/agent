@@ -6,7 +6,7 @@
 
 接入层、持久任务队列、文件上传、Dockerfile、完整服务拓扑的 Compose、HTTPS 入口配置、备份/部署脚本、HTTP 故障通知程序及 CI 已提供。仓库原有两个 PR 的内容及边界见 agent-integration.md。
 
-**尚未上线。** 当前没有云服务器、域名、通知接收地址、真实团队服务镜像或模型密钥；不能提供公网网址、实际测试账号、线上监控截图。当前电脑没有 Docker，容器构建、Caddy/Compose 校验由 CI 执行，实际上线验收须在服务器执行。CI 中的镜像名称仅用于配置语法检查，不是可部署成品。
+**尚未上线。** 本机已有Java/Maven、专用Debian WSL和Docker，真实沙箱8组场景、PostgreSQL重启及配套文件恢复7项演练通过。知识交付包已解出并补充可配置模型调用，选择DeepSeek `deepseek-flash`；真实Key与20案例人工评测仍待准备。当前缺云服务器、域名、前端产物及通知接收地址，不能提供公网网址或线上监控截图。各项证据与复现入口见 [本轮联调交付](1021-knowledge-and-deploy-v1.md)。
 
 ## 服务器准备好后的步骤
 
@@ -14,8 +14,8 @@
 
 1. 下载 Fork 的 feat/backend2-integration 分支；复制根目录 `.env.example` 为 `.env`。
 2. 填写 DOMAIN、ACME_EMAIL；生成随机 GATEWAY_API_KEY、POSTGRES_PASSWORD 和至少32字符的 JWT_SECRET_KEY。数据库密码使用 URL 安全字符，例如64位十六进制。真实值只存服务器，不提交 Git。
-3. 填写 FRONTEND_IMAGE、KNOWLEDGE_IMAGE、SANDBOX_IMAGE，建议固定不可变 tag/digest。业务后端已由 backend/Dockerfile 构建，不再依赖队友提供镜像；BACKEND_IMAGE可选。各服务端口为3000、8000、8100、8200。工程须提供监听8200的HTTP服务，执行镜像 zhigou-sandbox-jdk17:v1 不能直接充当API镜像。知识PR #2仍为TODO骨架。
-4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL。工程服务的沙箱隔离由 Agent 工程交付；本 Compose 不挂宿主 Docker socket，队友若依赖 Docker 执行器，需单独设计受控执行接口后联调，不能通过给公网 API 特权容器替代隔离。
+3. 填写 FRONTEND_IMAGE；业务、知识和沙箱API已有Dockerfile可从代码构建，KNOWLEDGE_IMAGE、SANDBOX_IMAGE、BACKEND_IMAGE可选。各服务内部端口为3000、8000、8100、8200。sandbox-execution是仅供构建的profile，deploy.sh先构建执行镜像，再启动正常服务；不要手工用该profile执行up。建议发布时固定不可变tag/digest。
+4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL=https://api.deepseek.com、LLM_MODEL=deepseek-flash。SANDBOX_WORK_DIR填Docker宿主机绝对目录，宿主/API容器内保持同路径；API仅在私有容器网络监听8200，不发布端口。API挂载该专用主机的Docker socket以创建受限执行容器，**socket的只读挂载不会限制Docker API权限**，该API进程具备主机Docker管理能力。因此使用专用部署环境，仅允许受信网关访问；不向学生开放Docker socket、API端口或任意镜像/路径参数。执行容器仍无网络、256MiB、5秒测试限时及能力丢弃。
 5. 填写 ALERT_WEBHOOK_URL：能接收 `{service,status,time}` JSON 的 HTTPS 通知入口；这里不是直接兼容所有飞书/钉钉/邮件接口，需要通知服务或格式转换。未填写仅打印日志，**不会收到通知**。
 6. 运行 `sh infra/deploy.sh`，查看 `docker compose --env-file .env -f infra/docker-compose.yml ps`。
 7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，其中 `/api/v1/*` 转发真实业务接口；`/business/*` 去掉此前缀后到业务后端。Agent接口使用业务登录的JWT，GATEWAY_API_KEY仅作为运维凭证。业务格式见 backend/README.md。
@@ -70,7 +70,7 @@ cd 'D:\软工\agent'
 # docker compose --env-file .env -f infra/docker-compose.yml exec -T db psql -v ON_ERROR_STOP=1 -U zhigou -d zhigou < /tmp/zhigou-restore.sql
 ```
 
-源PostgreSQL用户、库名为zhigou。还需在停止写入的演练环境校验 backend-uploads.sha256，将业务原文档恢复到新的 backend-uploads 卷，确认业务容器用户可写，再同时接回恢复的数据库与文件卷。仅恢复网关任务副本不能恢复业务原文档。真实PostgreSQL整套恢复仍需服务器环境验收。
+源PostgreSQL用户、库名为zhigou。还需在停止写入的演练环境校验 backend-uploads.sha256，将业务原文档恢复到新的 backend-uploads 卷，确认业务容器用户可写，再同时接回恢复的数据库与文件卷。仅恢复网关任务副本不能恢复业务原文档。本地真实PostgreSQL 17与原文档配套恢复已演练通过，命令为 `.\.venv\Scripts\python.exe -m infra.smoke_postgres --wsl-distro Debian`。服务器实际卷、定时备份与异机副本仍需上线环境验收。
 
 ## 日志和故障排查
 
@@ -84,8 +84,8 @@ cd 'D:\软工\agent'
 |---|---|
 | 公网地址 | 待服务器与域名 |
 | 测试账号 | 本地已有后端1演示账号；生产不自动创建，须单独初始化 |
-| 知识真实模型调用 | PR #2 仍为骨架，待 Agent 知识完成 |
-| 工程服务镜像 | 执行镜像已交付；HTTP服务打包与真实执行环境待核验 |
-| 前端/业务后端镜像 | 前端待交付；业务后端已有Dockerfile，本机未验证Docker构建 |
+| 知识真实模型调用 | 已补模型调用、检索与校验；DeepSeek Key和真实评测待补 |
+| 工程服务镜像 | 执行镜像与HTTP API Dockerfile已提供；本地8组真实执行通过 |
+| 前端/业务后端镜像 | 前端待交付；业务后端已有Dockerfile与CI构建 |
 | 告警接收渠道与截图 | 待部署配置与故障演练 |
-| 备份/恢复演练结果 | 网关本地演练已通过；PostgreSQL及服务器整套待验收 |
+| 备份/恢复演练结果 | 网关本地及真实PostgreSQL配套文件恢复通过；服务器定时/异机恢复待验收 |

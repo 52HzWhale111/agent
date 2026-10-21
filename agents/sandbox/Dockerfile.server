@@ -1,0 +1,12 @@
+FROM eclipse-temurin:17-jdk-alpine AS build
+WORKDIR /source
+COPY agents/sandbox/src/main/java/com/zhigou/SandboxServerLocal.java ./com/zhigou/SandboxServerLocal.java
+RUN javac -encoding UTF-8 -d /classes com/zhigou/SandboxServerLocal.java
+
+FROM eclipse-temurin:17-jdk-alpine
+RUN apk add --no-cache docker-cli
+WORKDIR /service
+COPY --from=build /classes /service/classes
+ENV SANDBOX_BIND_HOST=0.0.0.0
+EXPOSE 8200
+CMD ["java", "-Dfile.encoding=UTF-8", "-cp", "/service/classes", "com.zhigou.SandboxServerLocal"]
