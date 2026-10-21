@@ -1,9 +1,9 @@
 name: Gateway checks
 on:
   push:
-    paths: ['gateway/**', 'backend/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'agents/sandbox/**', 'infra/**', '.github/workflows/gateway.yml']
   pull_request:
-    paths: ['gateway/**', 'backend/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'agents/sandbox/**', 'infra/**', '.github/workflows/gateway.yml']
 permissions:
   contents: read
 jobs:
@@ -14,9 +14,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: mvn -B -ntp -f agents/sandbox/pom.xml compile
       - run: pip install -r gateway/requirements-dev.txt
       - run: python -m pytest backend/tests gateway/tests -q
-      - run: sh -n infra/deploy.sh infra/backup.sh
+      - run: sh -n infra/deploy.sh infra/backup.sh infra/install-docker-wsl.sh
       - run: systemd-analyze calendar '*-*-* 03:15:00 Asia/Shanghai'
       - run: docker build -f gateway/Dockerfile -t zhigou-gateway:test .
       - run: docker build -f backend/Dockerfile -t zhigou-backend:test .

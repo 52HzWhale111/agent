@@ -10,7 +10,8 @@ foreach ($record in $records) {
     if (-not $candidate) { continue }
     # Refuse to stop an unrelated process if Windows has recycled its PID.
     $command = $candidate.CommandLine
-    if ($command -and $command.Contains($record.module) -and $command.Contains("--port $($record.port)")) {
+    $portMatches = $command -and ($command.Contains("--port $($record.port)") -or ($record.module -eq 'com.zhigou.SandboxServerLocal' -and $record.port -eq 8200))
+    if ($command -and $command.Contains($record.module) -and $portMatches) {
         # The Windows venv launcher has a child Python process; stop its whole tree.
         & taskkill.exe /PID $record.pid /T /F | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Unable to stop $($record.name)." }
