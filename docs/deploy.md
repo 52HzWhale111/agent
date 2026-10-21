@@ -1,5 +1,7 @@
 # 后端2部署与交接
 
+本轮真实业务接口、工程文本协议及本地验证见 [1021-后端2联调-v2.md](1021-后端2联调-v2.md)。
+
 ## 当前交付状态
 
 接入层、持久任务队列、文件上传、Dockerfile、完整服务拓扑的 Compose、HTTPS 入口配置、备份/部署脚本、HTTP 故障通知程序及 CI 已提供。仓库原有两个 PR 的内容及边界见 agent-integration.md。
@@ -10,20 +12,20 @@
 
 建议 Linux 单机，安装并启用 Docker Engine 与 Compose 插件。开放80/443端口；域名 A/AAAA 指向服务器，未提供 IPv6 服务时不要保留错误 AAAA 记录。
 
-1. 下载本 PR 的代码；复制根目录 `.env.example` 为 `.env`。
-2. 填写 DOMAIN、ACME_EMAIL；生成随机 GATEWAY_API_KEY 与 POSTGRES_PASSWORD。数据库密码使用 URL 安全字符，例如64位十六进制。真实值只存服务器，不提交 Git。
-3. 填写 FRONTEND_IMAGE、BACKEND_IMAGE、KNOWLEDGE_IMAGE、SANDBOX_IMAGE，建议固定不可变 tag/digest。镜像必须真实实现 docs/agent-integration.md 的端口/路径：3000、8000、8100、8200。镜像需读取 PORT 或在启动命令中固定正确端口。不要将 PR #2 的 TODO 示例直接当上线知识服务。
+1. 下载 Fork 的 feat/backend2-integration 分支；复制根目录 `.env.example` 为 `.env`。
+2. 填写 DOMAIN、ACME_EMAIL；生成随机 GATEWAY_API_KEY、POSTGRES_PASSWORD 和至少32字符的 JWT_SECRET_KEY。数据库密码使用 URL 安全字符，例如64位十六进制。真实值只存服务器，不提交 Git。
+3. 填写 FRONTEND_IMAGE、KNOWLEDGE_IMAGE、SANDBOX_IMAGE，建议固定不可变 tag/digest。业务后端已由 backend/Dockerfile 构建，不再依赖队友提供镜像；BACKEND_IMAGE可选。各服务端口为3000、8000、8100、8200。工程须提供监听8200的HTTP服务，执行镜像 zhigou-sandbox-jdk17:v1 不能直接充当API镜像。知识PR #2仍为TODO骨架。
 4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL。工程服务的沙箱隔离由 Agent 工程交付；本 Compose 不挂宿主 Docker socket，队友若依赖 Docker 执行器，需单独设计受控执行接口后联调，不能通过给公网 API 特权容器替代隔离。
 5. 填写 ALERT_WEBHOOK_URL：能接收 `{service,status,time}` JSON 的 HTTPS 通知入口；这里不是直接兼容所有飞书/钉钉/邮件接口，需要通知服务或格式转换。未填写仅打印日志，**不会收到通知**。
 6. 运行 `sh infra/deploy.sh`，查看 `docker compose --env-file .env -f infra/docker-compose.yml ps`。
-7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，业务 `/business/*` 去掉此前缀后到业务后端。前端需按此前缀联调；业务接口具体字段由后端1提供。
-8. `GET /health/ready` 携带网关访问凭证，确认知识/工程服务真实可用。监控逐项检查网关、前端、后端和两个 Agent，每轮间隔30秒（单个检查最多5秒）；故障及恢复仅在状态变化时发通知，失败投递会重试。服务内置健康端点应检查必要依赖；业务 /health 应包含数据库连通性。
+7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，其中 `/api/v1/*` 转发真实业务接口；`/business/*` 去掉此前缀后到业务后端。Agent接口使用业务登录的JWT，GATEWAY_API_KEY仅作为运维凭证。业务格式见 backend/README.md。
+8. `GET /health/ready` 携带网关运维凭证，确认依赖路由可达。工程探测仅OPTIONS /sandbox/run-tests，不代表Docker执行已验证；上线仍须提交一次真实Java/JUnit任务。监控逐项检查网关、前端、后端和两个 Agent，每轮间隔30秒（单个检查最多5秒）；故障及恢复仅在状态变化时发通知，失败投递会重试。业务 /health 已检查数据库连通性。
 
 Caddy 持久化证书并自动续期；所有服务设置 unless-stopped，Docker 自启动后容器随之恢复。故意用 docker compose stop 停止的服务应手动 start，不能把管理员主动停止误认为重启策略失败。网关 liveness 不依赖 Agent，单个 Agent 故障不会把其他 API 一起停掉。数据库仅内网访问，网关8000只绑定服务器回环地址。
 
 ## 每日备份与恢复
 
-先手动运行 `sh infra/backup.sh`。成功后生成 `backups/snapshot-<UTC时间>-<进程号>/`，含 `postgres.sql.gz` 与 `gateway/`（SQLite快照、上传文件、SHA-256清单）。整套流程完成前使用 `.partial-*` 目录；PostgreSQL导出、网关快照或校验失败时脚本返回非零，不能把.partial当成成功备份。业务DB与网关DB分别取快照，不构成跨库同一时刻的事务，恢复后需核对业务document_id与file_id等关联。
+先手动运行 `sh infra/backup.sh`。成功后生成 `backups/snapshot-<UTC时间>-<进程号>/`，含 `postgres.sql.gz`、`gateway/`（SQLite快照、任务文件、SHA-256清单）、`backend-uploads/`（业务原文档）及其SHA-256清单。整套流程完成前使用 `.partial-*` 目录；导出、复制或校验失败时脚本返回非零，不能把.partial当成成功备份。业务DB与网关DB分别取快照，不构成跨库同一时刻的事务，恢复后需核对业务document_id与file_id等关联。
 
 复制到宿主的网关快照会再次用只读挂载校验；成功后清理本次在容器内创建的暂存快照。失败时可能保留.partial或容器暂存目录，排查后由管理员确认再清理。备份暂不自动删除历史快照，课程期间请监测空间、保留至少最近7天并定期加密同步异机。同机磁盘损坏时同机备份无法恢复。
 
@@ -68,7 +70,7 @@ cd 'D:\软工\agent'
 # docker compose --env-file .env -f infra/docker-compose.yml exec -T db psql -v ON_ERROR_STOP=1 -U zhigou -d zhigou < /tmp/zhigou-restore.sql
 ```
 
-源PostgreSQL用户、库名当前为zhigou，需与后端1确认。真实业务表恢复、演示账号、文档关联记录仍需队友数据与服务器环境验收；本地SQLite恢复成功不能代替PostgreSQL整套恢复通过。
+源PostgreSQL用户、库名为zhigou。还需在停止写入的演练环境校验 backend-uploads.sha256，将业务原文档恢复到新的 backend-uploads 卷，确认业务容器用户可写，再同时接回恢复的数据库与文件卷。仅恢复网关任务副本不能恢复业务原文档。真实PostgreSQL整套恢复仍需服务器环境验收。
 
 ## 日志和故障排查
 
@@ -81,9 +83,9 @@ cd 'D:\软工\agent'
 | 项目 | 实际值/状态 |
 |---|---|
 | 公网地址 | 待服务器与域名 |
-| 测试账号 | 待后端1创建；网关凭证不等同用户账号 |
+| 测试账号 | 本地已有后端1演示账号；生产不自动创建，须单独初始化 |
 | 知识真实模型调用 | PR #2 仍为骨架，待 Agent 知识完成 |
-| 工程服务镜像 | 待 Agent 工程交付 |
-| 前端/业务后端镜像 | 待对应同学交付 |
+| 工程服务镜像 | 执行镜像已交付；HTTP服务打包与真实执行环境待核验 |
+| 前端/业务后端镜像 | 前端待交付；业务后端已有Dockerfile，本机未验证Docker构建 |
 | 告警接收渠道与截图 | 待部署配置与故障演练 |
 | 备份/恢复演练结果 | 网关本地演练已通过；PostgreSQL及服务器整套待验收 |

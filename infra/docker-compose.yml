@@ -17,6 +17,8 @@ services:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
       KNOWLEDGE_AGENT_URL: http://knowledge:8100
       SANDBOX_AGENT_URL: http://sandbox:8200
+      SANDBOX_PROTOCOL: text
+      BACKEND_URL: http://backend:8000
       QA_TIMEOUT: "30"
       DOC_REVIEW_TIMEOUT: "60"
       CODE_RUN_TIMEOUT: "120"
@@ -58,10 +60,20 @@ services:
     logging: *logging
 
   backend:
-    image: ${BACKEND_IMAGE:?Set the backend image serving HTTP on 8000}
+    image: ${BACKEND_IMAGE:-zhigou-backend:local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
+    command: ["sh", "-c", "python scripts/manage.py init-db && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
     environment:
-      DATABASE_URL: postgresql://zhigou:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zhigou
+      DATABASE_URL: postgresql+psycopg://zhigou:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zhigou
+      APP_ENV: production
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY to at least 32 random characters}
+      CORS_ORIGINS: https://${DOMAIN:?Set DOMAIN}
+      UPLOAD_DIR: /service/backend/storage
+    volumes:
+      - backend-uploads:/service/backend/storage
     depends_on:
       db:
         condition: service_healthy
@@ -113,5 +125,6 @@ services:
 volumes:
   gateway-data:
   postgres-data:
+  backend-uploads:
   caddy-data:
   caddy-config:

@@ -1,9 +1,9 @@
 name: Gateway checks
 on:
   push:
-    paths: ['gateway/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'infra/**', '.github/workflows/gateway.yml']
   pull_request:
-    paths: ['gateway/**', 'infra/**', '.github/workflows/gateway.yml']
+    paths: ['gateway/**', 'backend/**', 'infra/**', '.github/workflows/gateway.yml']
 permissions:
   contents: read
 jobs:
@@ -15,9 +15,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r gateway/requirements-dev.txt
-      - run: python -m pytest gateway/tests -q
+      - run: python -m pytest backend/tests gateway/tests -q
       - run: sh -n infra/deploy.sh infra/backup.sh
       - run: systemd-analyze calendar '*-*-* 03:15:00 Asia/Shanghai'
       - run: docker build -f gateway/Dockerfile -t zhigou-gateway:test .
+      - run: docker build -f backend/Dockerfile -t zhigou-backend:test .
       - run: docker compose --env-file infra/ci.env -f infra/docker-compose.yml config --quiet
       - run: docker run --rm -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost -e ACME_EMAIL=test@example.com caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile

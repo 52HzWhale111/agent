@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "project": "知构 软件工程学习智能体",
+  "source_bundle": "优先读取 knowledge-base，兼容 knowledge-base/knowledge-base；资料尚未合并时使用 backend/data/knowledge_snapshot.json",
+  "source_pull_request": "https://github.com/52HzWhale111/agent/pull/1",
+  "import_counts": {"knowledge_points": 60, "requirement_cases": 20, "practice_questions": 18},
+  "source_inventory": {"markdown_files": 37, "png_files": 6, "knowledge_point_files": 8, "case_files": 4, "review_checklists": 3, "defective_document_pairs": 10},
+  "knowledge_point_ids": {"prefix": "KP-", "start": 1, "end": 60, "contiguous": true},
+  "case_ids": {"prefix": "RC-", "start": 1, "end": 20, "contiguous": true},
+  "chapter_counts": {"1": 8, "2": 8, "3": 8, "4": 8, "5": 9, "6": 9, "7": 3, "8": 7},
+  "import_scope": ["01_知识点/*.md", "02_需求案例/*.md", "backend/data/practice_questions.json"],
+  "excluded_from_student_knowledge": ["03_文档模板", "04_UML示例图", "05_埋雷文档"],
+  "practice_provenance": "18道由知构团队为联调和功能演示编制的单选题，依据给定知识点整理，非教材原题或教师正式试题。每题包含明确选项、唯一正确选项、解析和真实知识点ID。",
+  "demo": {
+    "opt_in": true,
+    "users": ["demo_new", "demo_student", "demo_weak"],
+    "records": 45,
+    "diagram_groups": 3,
+    "diagram_versions": 4,
+    "weak_user_expected": [
+      {"knowledge_point_id": "KP-33", "attempts": 5, "incorrect": 5, "error_rate": 1.0},
+      {"knowledge_point_id": "KP-34", "attempts": 5, "incorrect": 4, "error_rate": 0.8},
+      {"knowledge_point_id": "KP-48", "attempts": 5, "incorrect": 3, "error_rate": 0.6}
+    ],
+    "idempotency": "采用稳定UUID和每用户唯一client_event_id；重复导入不覆盖已存在的密码、答题记录或图版本。"
+  },
+  "source_limitations": [
+    "60个知识点均保留来源原文；未提供教材和课件原文件，未核验其中页码与事实表述。",
+    "知识点chapter表示课程资料分组，不等同于出处中的教材章节。",
+    "KP-59仅给出课件17.pdf，没有页码；不补造。",
+    "只有KP-01至KP-08提供关联功能，其余导入为空数组。",
+    "20个需求案例未提供逐条外部出处和知识点ID映射，knowledge_point_ids保留为空数组。",
+    "多数案例需求条目数量少于分工文档建议，导入不将已有资料改写为已满足该建议。",
+    "3套模板实为结构与评审点清单；未当作完整可填写模板导入。",
+    "原有6张UML为PNG，没有可编辑节点与连线；demo_diagrams.json为另行编制的演示图。",
+    "埋雷文档故意包含错误，与学生知识点和自动判题答案隔离。"
+  ]
+}

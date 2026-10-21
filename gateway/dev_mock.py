@@ -3,7 +3,7 @@ import asyncio
 import os
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 service = os.getenv("MOCK_SERVICE", "knowledge")
@@ -30,6 +30,22 @@ async def health():
     return JSONResponse({"mock": True, "service": service,
                          "status": "unavailable" if behavior.unavailable else "ok"},
                         status_code=503 if behavior.unavailable else 200)
+
+
+@app.api_route("/sandbox/run-tests", methods=["POST", "OPTIONS"])
+async def text_sandbox(request: Request):
+    if service != "sandbox":
+        return Response(status_code=404)
+    if behavior.unavailable:
+        return JSONResponse({"mock": True, "status": "ERROR"}, status_code=503)
+    if request.method == "OPTIONS":
+        return Response(status_code=204)
+    body = (await request.body()).decode("utf-8")
+    if body.count("---TEST---") != 1:
+        return JSONResponse({"mock": True, "status": "ERROR"}, status_code=400)
+    await asyncio.sleep(behavior.delay_seconds)
+    return {"mock": True, "status": "MOCK", "tests": {"success": None, "failed": None},
+            "coverage": {"line": None}, "output": "仅验证纯文本协议；未编译或执行学生代码。"}
 
 
 @app.post("/{operation}")

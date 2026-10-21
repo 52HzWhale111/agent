@@ -9,7 +9,7 @@ import urllib.request
 TARGETS = {
     "gateway": "http://gateway:8000/health/ready",
     "knowledge": "http://knowledge:8100/health",
-    "sandbox": "http://sandbox:8200/health",
+    "sandbox": "http://sandbox:8200/sandbox/run-tests",
     "backend": "http://backend:8000/health",
     "frontend": "http://frontend:3000/",
 }
@@ -18,7 +18,8 @@ TARGETS = {
 def check(url, authenticated=True):
     try:
         headers = {"Authorization": "Bearer " + os.getenv("GATEWAY_API_KEY", "")} if authenticated else {}
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=5) as response:
+        method = "OPTIONS" if url.rstrip('/').endswith('/sandbox/run-tests') else "GET"
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers, method=method), timeout=5) as response:
             return response.status < 400
     except (OSError, urllib.error.URLError):
         return False

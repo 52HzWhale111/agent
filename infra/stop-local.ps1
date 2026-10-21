@@ -1,4 +1,4 @@
-param([ValidateSet('all','gateway','knowledge','sandbox')][string]$Service='all')
+param([ValidateSet('all','gateway','knowledge','sandbox','backend')][string]$Service='all')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $stateFile = Join-Path $projectRoot 'data/local/processes.json'

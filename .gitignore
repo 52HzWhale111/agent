@@ -51,3 +51,22 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Backend 1 local runtime and verification outputs
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+*.db
+*.db-shm
+*.db-wal
+.dev-jwt-secret
+backend/storage/
+backend/test-results/
+delivery/
+
+# Keep versioned backend seed JSON while runtime data remains ignored.
+!/backend/data/
+/backend/data/*
+!/backend/data/*.json

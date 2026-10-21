@@ -22,6 +22,12 @@ snapshot="/data/backup-$stamp"
 compose exec -T gateway python /app/infra/gateway_backup.py backup /data "$snapshot"
 container=$(compose ps -q gateway)
 docker cp "$container:$snapshot" "$partial/gateway"
+backend_container=$(compose ps -q backend)
+docker cp "$backend_container:/service/backend/storage" "$partial/backend-uploads"
+(cd "$partial" && find backend-uploads -type f -exec sha256sum {} \; > backend-uploads.sha256)
+if [ -s "$partial/backend-uploads.sha256" ]; then
+    (cd "$partial" && sha256sum -c backend-uploads.sha256)
+fi
 image=$(docker inspect --format '{{.Image}}' "$container")
 docker run --rm --user 0 --mount "type=bind,source=$PWD/$partial/gateway,target=/snapshot,readonly" --entrypoint python "$image" /app/infra/gateway_backup.py verify /snapshot
 mv "$partial" "backups/snapshot-$stamp"
