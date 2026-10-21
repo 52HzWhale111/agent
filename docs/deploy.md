@@ -6,7 +6,7 @@
 
 接入层、持久任务队列、文件上传、Dockerfile、完整服务拓扑的 Compose、HTTPS 入口配置、备份/部署脚本、HTTP 故障通知程序及 CI 已提供。仓库原有两个 PR 的内容及边界见 agent-integration.md。
 
-**尚未上线。** 本机已有Java/Maven、专用Debian WSL和Docker，真实沙箱8组场景、PostgreSQL重启及配套文件恢复7项演练通过。DeepSeek `deepseek-flash`真实知识三链路已通过，20案例初查仍有资料与评审质量问题，待知识/测试同学修正验收。当前缺云服务器、域名、前端产物及通知接收地址，不能提供公网网址或线上监控截图。各项证据与复现入口见 [本轮联调交付](1021-knowledge-and-deploy-v1.md)。
+**后端已在香港 ECS 上试运行，前端仍待交付。** 公网网关文档为 https://zhigou.47-239-43-172.sslip.io/docs ，业务文档为 https://zhigou.47-239-43-172.sslip.io/business/docs 。真实数据库、Java/JUnit 沙箱与 DeepSeek 三链路已在服务器验收；试运行模型调用设有不自动重置的总限额。当前实际配置、验证记录、测试步骤和费用边界见 [香港试运行交付](1022-香港试运行-v1.md)。原本地联调记录继续保留，属于各自当时的状态。
 
 ## 服务器准备好后的步骤
 

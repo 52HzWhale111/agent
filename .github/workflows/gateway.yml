@@ -31,4 +31,6 @@ jobs:
       - run: docker build -t zhigou-sandbox-jdk17:v1 agents/sandbox
       - run: python -m infra.smoke_containers
       - run: docker compose --env-file infra/ci.env -f infra/docker-compose.yml config --quiet
+      - run: docker compose --env-file infra/ci.env -f infra/docker-compose.cloud.yml config --quiet
       - run: docker run --rm -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost -e ACME_EMAIL=test@example.com caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - run: docker run --rm -v "$PWD/infra/Caddyfile.cloud:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile

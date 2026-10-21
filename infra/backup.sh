@@ -4,7 +4,7 @@ umask 077
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 mkdir -p backups
 stamp=$(date -u +%Y%m%dT%H%M%SZ)-$$
-compose() { docker compose --env-file .env -f infra/docker-compose.yml "$@"; }
+compose() { docker compose --env-file .env -f "${ZHIGOU_COMPOSE_FILE:-infra/docker-compose.yml}" "$@"; }
 partial="backups/.partial-$stamp"
 mkdir "$partial"
 tmp="$partial/postgres.sql.gz.tmp"

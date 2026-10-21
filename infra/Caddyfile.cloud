@@ -1,0 +1,24 @@
+{$DOMAIN} {
+    request_body {
+        max_size 21MB
+    }
+    handle /api/* {
+        reverse_proxy gateway:8000
+    }
+    handle /health/* {
+        reverse_proxy gateway:8000
+    }
+    handle_path /business/* {
+        reverse_proxy backend:8000
+    }
+    @gateway_docs path /docs /docs/* /redoc /openapi.json
+    handle @gateway_docs {
+        reverse_proxy gateway:8000
+    }
+    handle {
+        redir /docs 302
+    }
+    log {
+        output stdout
+    }
+}
