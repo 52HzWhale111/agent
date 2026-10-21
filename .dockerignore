@@ -1,0 +1,12 @@
+.venv
+.git
+**/__pycache__
+**/.pytest_cache
+**/.env
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/.dev-jwt-secret
+backend/storage
+backend/test-results
+delivery

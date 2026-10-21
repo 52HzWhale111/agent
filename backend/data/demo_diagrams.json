@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "provenance": "知构团队为接口联调编制的可编辑演示图，与知识工程PNG示例分别保存；非自动识别PNG所得。",
+  "diagrams": [
+    {
+      "key": "lost-found-use-case", "title": "校园失物招领用例图", "diagram_type": "use_case", "version": 1,
+      "data": {
+        "nodes": [
+          {"id": "uc-student", "type": "actor", "label": "学生", "position": {"x": 60, "y": 160}, "properties": {}},
+          {"id": "uc-admin", "type": "actor", "label": "管理员", "position": {"x": 640, "y": 160}, "properties": {}},
+          {"id": "uc-boundary", "type": "system_boundary", "label": "校园失物招领系统", "position": {"x": 200, "y": 40}, "properties": {"width": 380, "height": 360}},
+          {"id": "uc-publish", "type": "use_case", "label": "发布失物", "position": {"x": 260, "y": 100}, "properties": {"parent_id": "uc-boundary"}},
+          {"id": "uc-search", "type": "use_case", "label": "查找物品", "position": {"x": 260, "y": 190}, "properties": {"parent_id": "uc-boundary"}},
+          {"id": "uc-claim", "type": "use_case", "label": "申请认领", "position": {"x": 430, "y": 190}, "properties": {"parent_id": "uc-boundary"}},
+          {"id": "uc-review", "type": "use_case", "label": "审核认领", "position": {"x": 430, "y": 290}, "properties": {"parent_id": "uc-boundary"}}
+        ],
+        "edges": [
+          {"id": "uc-edge-1", "source": "uc-student", "target": "uc-publish", "type": "association", "label": ""},
+          {"id": "uc-edge-2", "source": "uc-student", "target": "uc-search", "type": "association", "label": ""},
+          {"id": "uc-edge-3", "source": "uc-student", "target": "uc-claim", "type": "association", "label": ""},
+          {"id": "uc-edge-4", "source": "uc-admin", "target": "uc-review", "type": "association", "label": ""}
+        ]
+      }
+    },
+    {
+      "key": "shopping-cart-class", "title": "购物车类图", "diagram_type": "class", "version": 1,
+      "data": {
+        "nodes": [
+          {"id": "class-user", "type": "class", "label": "User", "position": {"x": 80, "y": 100}, "properties": {"attributes": ["id: UUID", "name: String"], "methods": ["getCart(): Cart"]}},
+          {"id": "class-cart", "type": "class", "label": "Cart", "position": {"x": 360, "y": 100}, "properties": {"attributes": ["id: UUID"], "methods": ["addItem(item: CartItem)", "total(): Decimal"]}},
+          {"id": "class-cart-item", "type": "class", "label": "CartItem", "position": {"x": 640, "y": 100}, "properties": {"attributes": ["quantity: int", "unitPrice: Decimal"], "methods": ["subtotal(): Decimal"]}}
+        ],
+        "edges": [
+          {"id": "class-edge-1", "source": "class-user", "target": "class-cart", "type": "association", "label": "1 — 1"},
+          {"id": "class-edge-2", "source": "class-cart", "target": "class-cart-item", "type": "composition", "label": "1 — 0..*"}
+        ]
+      }
+    },
+    {
+      "key": "shopping-cart-class", "title": "购物车类图", "diagram_type": "class", "version": 2,
+      "data": {
+        "nodes": [
+          {"id": "class-user", "type": "class", "label": "User", "position": {"x": 80, "y": 100}, "properties": {"attributes": ["id: UUID", "name: String"], "methods": ["getCart(): Cart"]}},
+          {"id": "class-cart", "type": "class", "label": "Cart", "position": {"x": 360, "y": 100}, "properties": {"attributes": ["id: UUID"], "methods": ["addItem(item: CartItem)", "removeItem(itemId: UUID)", "total(): Decimal"]}},
+          {"id": "class-cart-item", "type": "class", "label": "CartItem", "position": {"x": 640, "y": 100}, "properties": {"attributes": ["quantity: int", "unitPrice: Decimal"], "methods": ["subtotal(): Decimal"]}},
+          {"id": "class-product", "type": "class", "label": "Product", "position": {"x": 640, "y": 360}, "properties": {"attributes": ["id: UUID", "name: String", "stock: int"], "methods": ["isAvailable(): bool"]}}
+        ],
+        "edges": [
+          {"id": "class-edge-1", "source": "class-user", "target": "class-cart", "type": "association", "label": "1 — 1"},
+          {"id": "class-edge-2", "source": "class-cart", "target": "class-cart-item", "type": "composition", "label": "1 — 0..*"},
+          {"id": "class-edge-3", "source": "class-cart-item", "target": "class-product", "type": "association", "label": "0..* — 1"}
+        ]
+      }
+    },
+    {
+      "key": "login-sequence", "title": "登录时序图", "diagram_type": "sequence", "version": 1,
+      "data": {
+        "nodes": [
+          {"id": "seq-user", "type": "lifeline", "label": "用户", "position": {"x": 80, "y": 40}, "properties": {"height": 440}},
+          {"id": "seq-ui", "type": "lifeline", "label": "登录页面", "position": {"x": 280, "y": 40}, "properties": {"height": 440}},
+          {"id": "seq-api", "type": "lifeline", "label": "AuthService", "position": {"x": 480, "y": 40}, "properties": {"height": 440}},
+          {"id": "seq-db", "type": "lifeline", "label": "数据库", "position": {"x": 680, "y": 40}, "properties": {"height": 440}}
+        ],
+        "edges": [
+          {"id": "seq-edge-1", "source": "seq-user", "target": "seq-ui", "type": "message", "label": "1 提交账号密码"},
+          {"id": "seq-edge-2", "source": "seq-ui", "target": "seq-api", "type": "message", "label": "2 POST /api/v1/auth/login"},
+          {"id": "seq-edge-3", "source": "seq-api", "target": "seq-db", "type": "message", "label": "3 查询用户"},
+          {"id": "seq-edge-4", "source": "seq-db", "target": "seq-api", "type": "return", "label": "4 用户及密码摘要"},
+          {"id": "seq-edge-5", "source": "seq-api", "target": "seq-ui", "type": "return", "label": "5 验证后返回访问令牌"},
+          {"id": "seq-edge-6", "source": "seq-ui", "target": "seq-user", "type": "return", "label": "6 显示登录成功"}
+        ]
+      }
+    }
+  ]
+}
