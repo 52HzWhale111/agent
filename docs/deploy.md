@@ -15,7 +15,7 @@
 1. 下载 Fork 的 feat/backend2-integration 分支；复制根目录 `.env.example` 为 `.env`。
 2. 填写 DOMAIN、ACME_EMAIL；生成随机 GATEWAY_API_KEY、POSTGRES_PASSWORD 和至少32字符的 JWT_SECRET_KEY。数据库密码使用 URL 安全字符，例如64位十六进制。真实值只存服务器，不提交 Git。
 3. 填写 FRONTEND_IMAGE；业务、知识和沙箱API已有Dockerfile可从代码构建，KNOWLEDGE_IMAGE、SANDBOX_IMAGE、BACKEND_IMAGE可选。各服务内部端口为3000、8000、8100、8200。sandbox-execution是仅供构建的profile，deploy.sh先构建执行镜像，再启动正常服务；不要手工用该profile执行up。建议发布时固定不可变tag/digest。
-4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL=https://api.deepseek.com、LLM_MODEL=deepseek-flash。SANDBOX_WORK_DIR填Docker宿主机绝对目录，宿主/API容器内保持同路径；API仅在私有容器网络监听8200，不发布端口。API挂载该专用主机的Docker socket以创建受限执行容器，**socket的只读挂载不会限制Docker API权限**，该API进程具备主机Docker管理能力。因此使用专用部署环境，仅允许受信网关访问；不向学生开放Docker socket、API端口或任意镜像/路径参数。执行容器仍无网络、256MiB、5秒测试限时及能力丢弃。
+4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL=https://api.deepseek.com、LLM_MODEL=deepseek-flash。SANDBOX_WORK_DIR填Docker宿主机绝对目录，宿主/API容器内保持同路径；首次使用空的专用目录，由Docker创建，或确认仅该目录归属UID 0可写。API已丢弃DAC覆盖能力，预建为其他用户所有时会拒绝写入；不要放宽整个仓库权限。API仅在私有容器网络监听8200，不发布端口。API挂载该专用主机的Docker socket以创建受限执行容器，**socket的只读挂载不会限制Docker API权限**，该API进程具备主机Docker管理能力。因此使用专用部署环境，仅允许受信网关访问；不向学生开放Docker socket、API端口或任意镜像/路径参数。执行容器仍无网络、256MiB、5秒测试限时及能力丢弃。
 5. 填写 ALERT_WEBHOOK_URL：能接收 `{service,status,time}` JSON 的 HTTPS 通知入口；这里不是直接兼容所有飞书/钉钉/邮件接口，需要通知服务或格式转换。未填写仅打印日志，**不会收到通知**。
 6. 运行 `sh infra/deploy.sh`，查看 `docker compose --env-file .env -f infra/docker-compose.yml ps`。
 7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，其中 `/api/v1/*` 转发真实业务接口；`/business/*` 去掉此前缀后到业务后端。Agent接口使用业务登录的JWT，GATEWAY_API_KEY仅作为运维凭证。业务格式见 backend/README.md。

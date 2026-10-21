@@ -44,6 +44,9 @@ def main():
         work = str(root)
         if options.wsl_distro:
             work = subprocess.check_output(['wsl.exe', '-d', options.wsl_distro, '-u', 'root', '--exec', 'wslpath', '-a', '-u', work]).decode('utf-8').strip()
+        # cap-drop ALL removes DAC override: align only this new empty bind directory with API UID 0.
+        run('run', '--rm', '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--security-opt', 'no-new-privileges',
+            '-v', work + ':/work', '--entrypoint', 'chown', 'zhigou-sandbox-api:local', '0:0', '/work')
         sandbox = launch('sandbox', 'zhigou-sandbox-api:local', 8200, [
             '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:size=64m',
             '-e', 'SANDBOX_TMP_DIR=' + work, '-v', work + ':' + work,
