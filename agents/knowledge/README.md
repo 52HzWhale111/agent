@@ -39,7 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File infra/start-knowledge.ps1
 
 ## 验证边界
 
-新增6项协议回归覆盖三条链路、Prompt填充、计数纠正、缺配置、未知知识与非法模型输出/伪造引用。测试使用模型替身，不能写成真实模型验收。真实联调脚本需Key；原20个案例仍须知识/测试同学实际运行、按标准答案人工判定并填写记录。当前不宣称检出率、误报率或领域能力提升已达标。
+新增6项协议回归覆盖三条链路、Prompt填充、计数纠正、缺配置、未知知识与非法模型输出/伪造引用。测试使用模型替身，不能写成真实模型验收。2026-10-21本机已配置真实Key并跑通问答、拆解和上传评审三条链路；`python -m agents.knowledge.evaluate_cases`已跑完原20案例，结果保存在忽略目录。发现QA-06/07资料/检索缺口及评审标准版本冲突、误报，见 [真实验证记录](../../docs/1021-knowledge-validation-v1.md)。知识/测试同学仍需统一标准后人工验收，当前不宣称检出率、误报率或领域能力提升已达标。
 
 Docker构建：`docker build -f agents/knowledge/Dockerfile -t zhigou-knowledge:local .`。Compose已包含构建入口；Key由服务器`.env`注入，知识端口仅在容器网络内使用。
 

@@ -7,7 +7,8 @@
 | 交付 | 当前状态 | 复现入口 |
 |---|---|---|
 | 知识Agent | 解出原10个文件，补真实HTTP模型调用、检索、Prompt填充、JSON/出处校验及错误处理 | `agents/knowledge/README.md` |
-| 知识模型 | 用户选定DeepSeek-V4.1-Flash-1017，官方API名称 `deepseek-flash`；未配置Key时503，不返回占位答案 | `data/local/knowledge.env`（忽略，不提交） |
+| 知识模型 | DeepSeek-V4.1-Flash-1017官方别名 `deepseek-flash`；本机已配置并跑通3条真实模型链路 | `data/local/knowledge.env`（忽略，不提交） |
+| 知识案例 | 20条真实接口调用完成；发现资料缺口、预期清单冲突及评审误报，未作语义通过承诺 | `docs/1021-knowledge-validation-v1.md` |
 | 自动测试 | 69项通过，含新增6项知识协议测试；模型替身仅证明协议与异常处理 | `python -m pytest backend/tests gateway/tests -q` |
 | PostgreSQL | 真实17.11数据库完成7项检查：初始化、权限/原文件、图版本、答题幂等、重启、备份校验、恢复业务数据一致 | `python -m infra.smoke_postgres --wsl-distro Debian` |
 | 沙箱服务化 | 新增HTTP API Dockerfile，与执行镜像分开；Compose内私有访问、相同路径工作目录及受限执行容器 | `agents/sandbox/Dockerfile.server` |
@@ -18,7 +19,7 @@
 
 ## 本机知识服务接入
 
-当前8000网关与8001真实业务继续沿用，8200为真实本地沙箱。8100运行新知识服务，缺模型配置时未就绪。首次启动整套服务可按沙箱运行说明执行，最后替换知识模拟服务：
+当前8000网关与8001真实业务继续沿用，8200为真实本地沙箱。8100运行已配置的真实知识服务。首次启动整套服务可按沙箱运行说明执行，最后替换知识模拟服务：
 
 ```powershell
 cd 'D:\软工\agent'
@@ -29,6 +30,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File infra/start-knowledge.ps1
 ```
 
 `smoke_knowledge`使用后端1本地演示账号经网关实际调用问答、需求拆解、DOCX上传→评审→轮询，结果记录到忽略目录 `data/local/knowledge-smoke.json`，不保存Token。它验证代表性链路，不代替20个案例的领域语义评测；不能把HTTP成功当作答案正确、检出率达标。
+
+2026-10-21三条真实链路已通过。另以 `python -m agents.knowledge.evaluate_cases` 跑完原20案例，详细初查及知识/测试对接问题见 [真实知识验证记录](1021-knowledge-validation-v1.md)。
 
 ## 部署前可复现的检查
 
@@ -57,8 +60,8 @@ Windows挂载盘若出现`failed to xattr .pytest_cache`，将**干净Git工作�
 
 | 责任方 | 仍需提供或执行 |
 |---|---|
-| 用户/模型账号负责人 | 填DeepSeek API Key；运行三条真实模型链路，确认额度和网络 |
-| 知识Agent与测试 | 实跑原20个案例，核对出处、需求合理性与评审检出/误报；保留定制前后同输入对照，勿把模板填成已通过记录 |
+| 模型账号负责人 | 本机已配置并完成真实调用；上线时单独配置服务器凭据与额度 |
+| 知识Agent与测试 | 已有20条实际响应，需按验证记录修资料缺口、统一DEF标准、复核出处与误报；补定制前后同输入对照与人工验收 |
 | 前端1/前端2 | 可运行代码或镜像、构建说明、API地址配置；联调JWT、任务轮询、文档错误、UML版本冲突和结果展示 |
 | Agent工程 | 图代码一致性接口、细粒度分支定位及约定范围内的项目样例；ZIP执行仍不支持，网关明确拒绝 |
 | 组长/部署负责人 | 云服务器、登录方式、域名及通知接收渠道；审阅后合并当前PR |

@@ -2,11 +2,11 @@
 
 后端2交付入口：
 
-知识交付包接入与部署补充见 [1021-knowledge-and-deploy-v1](../docs/1021-knowledge-and-deploy-v1.md)；知识服务运行入口为 `agents.knowledge.api:app`，模型选择DeepSeek `deepseek-flash`，缺Key时明确未就绪。
+知识交付包接入与部署补充见 [1021-knowledge-and-deploy-v1](../docs/1021-knowledge-and-deploy-v1.md)；知识服务运行入口为 `agents.knowledge.api:app`，DeepSeek `deepseek-flash`真实三链路已通过，20案例初查与待修问题见 [验证记录](../docs/1021-knowledge-validation-v1.md)。
 
 已适配主仓库后端1的登录、文档接口，以及工程PR #5的纯文本测试协议。联调方式见 [1021-后端2联调-v2](../docs/1021-后端2联调-v2.md)。
 
-真实Docker沙箱已在本机验证，通过网关运行的8组场景及启动方式见 [真实沙箱本地运行](../docs/1021-sandbox-local-v1.md)。当前8200可切换为真实服务，8100知识Agent仍为模拟服务。
+真实Docker沙箱已在本机验证，通过网关运行的8组场景及启动方式见 [真实沙箱本地运行](../docs/1021-sandbox-local-v1.md)。当前8200运行真实沙箱，8100运行真实知识服务；下方Mock命令仅用于协议测试。
 
 本地启动真实业务服务与Agent测试替身：
 
