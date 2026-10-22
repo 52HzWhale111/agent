@@ -1,0 +1,26 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    request_body {
+        max_size 21MB
+    }
+    # The gateway preserves /api; business backend routes use /business prefix.
+    handle /api/* {
+        reverse_proxy gateway:8000
+    }
+    handle /health/* {
+        reverse_proxy gateway:8000
+    }
+    handle_path /business/* {
+        reverse_proxy backend:8000
+    }
+    handle {
+        reverse_proxy frontend:3000
+    }
+    log {
+        output stdout
+        format json
+    }
+}

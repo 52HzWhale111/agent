@@ -35,6 +35,7 @@ target/
 *.sqlite3
 data/
 uploads/
+backups/
 tmp/
 
 # ---- 大文件（视频、PPT、数据集走网盘）----

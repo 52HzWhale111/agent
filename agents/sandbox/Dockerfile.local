@@ -1,0 +1,5 @@
+# Same JDK/JUnit/JaCoCo versions as the original Dockerfile.
+# Place verified JARs in the build context before this offline build.
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /opt/tools
+COPY junit-platform-console-standalone.jar jacococli.jar jacocoagent.jar ./

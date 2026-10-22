@@ -1,0 +1,167 @@
+name: zhigou
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  # Build target only; this profile is never started by normal `compose up`.
+  sandbox-execution:
+    profiles: [build]
+    image: ${SANDBOX_EXECUTION_IMAGE:-zhigou-sandbox-jdk17:v1}
+    build:
+      context: ../agents/sandbox
+      dockerfile: Dockerfile
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      GATEWAY_DATA_DIR: /data
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
+      KNOWLEDGE_AGENT_URL: http://knowledge:8100
+      SANDBOX_AGENT_URL: http://sandbox:8200
+      SANDBOX_PROTOCOL: text
+      BACKEND_URL: http://backend:8000
+      QA_TIMEOUT: "30"
+      DOC_REVIEW_TIMEOUT: "60"
+      CODE_RUN_TIMEOUT: "120"
+      MAX_UPLOAD_MB: "20"
+    volumes:
+      - gateway-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [default, sandbox-internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+
+  # Real team images are required; no placeholder Agent is presented as a finished service.
+  knowledge:
+    image: ${KNOWLEDGE_IMAGE:-zhigou-knowledge:local}
+    build:
+      context: ..
+      dockerfile: agents/knowledge/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "8100"
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+    logging: *logging
+
+  sandbox:
+    image: ${SANDBOX_IMAGE:-zhigou-sandbox-api:local}
+    build:
+      context: ..
+      dockerfile: agents/sandbox/Dockerfile.server
+    restart: unless-stopped
+    environment:
+      PORT: "8200"
+      SANDBOX_TMP_DIR: ${SANDBOX_WORK_DIR:?Set absolute sandbox work directory on the Docker host}
+      SANDBOX_EXECUTION_IMAGE: ${SANDBOX_EXECUTION_IMAGE:-zhigou-sandbox-jdk17:v1}
+    volumes:
+      # API service controls the dedicated host engine; never publish its port.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Identical host/container path is required for sibling execution-container bind mounts.
+      - ${SANDBOX_WORK_DIR:?Set SANDBOX_WORK_DIR}:${SANDBOX_WORK_DIR:?Set SANDBOX_WORK_DIR}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks: [sandbox-internal]
+    logging: *logging
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set the frontend image serving HTTP on 3000}
+    restart: unless-stopped
+    logging: *logging
+
+  backend:
+    image: ${BACKEND_IMAGE:-zhigou-backend:local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    command: ["sh", "-c", "python scripts/manage.py init-db && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://zhigou:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zhigou
+      APP_ENV: production
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY to at least 32 random characters}
+      CORS_ORIGINS: https://${DOMAIN:?Set DOMAIN}
+      UPLOAD_DIR: /service/backend/storage
+    volumes:
+      - backend-uploads:/service/backend/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zhigou
+      POSTGRES_DB: zhigou
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U zhigou -d zhigou"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  edge:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to a public DNS name}
+      ACME_EMAIL: ${ACME_EMAIL:?Set certificate contact email}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+  monitor:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python", "-u", "-m", "infra.monitor"]
+    working_dir: /app
+    environment:
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_CONFIG_FILE: /alerts/config.json
+      ALERT_STATE_DIR: /alerts/state
+    volumes:
+      - ./:/app/infra:ro
+      - ${ALERT_DATA_DIR:-../data/local/alerts}:/alerts
+    networks: [default, sandbox-internal]
+    logging: *logging
+
+networks:
+  sandbox-internal:
+    internal: true
+
+volumes:
+  gateway-data:
+  postgres-data:
+  backend-uploads:
+  caddy-data:
+  caddy-config:

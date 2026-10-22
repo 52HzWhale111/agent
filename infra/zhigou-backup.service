@@ -1,0 +1,10 @@
+[Unit]
+Description=Zhigou PostgreSQL and gateway daily backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent
+ExecStart=/bin/sh /opt/agent/infra/backup.sh
+UMask=0077
