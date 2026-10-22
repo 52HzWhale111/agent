@@ -2,6 +2,20 @@
     request_body {
         max_size 21MB
     }
+    handle_path /ops/backup/* {
+        header Cache-Control no-store
+        @operator {
+            header Authorization "Bearer {$GATEWAY_API_KEY}"
+            path /index.json /snapshot-*.cms
+        }
+        handle @operator {
+            root * /backup-export
+            file_server {
+                hide .*
+            }
+        }
+        respond 404
+    }
     handle /api/* {
         reverse_proxy gateway:8000
     }
@@ -16,7 +30,7 @@
         reverse_proxy gateway:8000
     }
     handle {
-        redir /docs 302
+        redir * /docs 302
     }
     log {
         output stdout

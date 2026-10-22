@@ -88,6 +88,41 @@ def main():
             assert response.status_code == 503 and response.json()['detail']['code'] == 'MODEL_NOT_CONFIGURED'
             report['checks'].append('packaged knowledge API loads 60 original + 2 supplemental points and templates; absent credentials rejected')
             print('PASS packaged knowledge API: no placeholder success without credentials', flush=True)
+            exports = root / 'backup-export'
+            exports.mkdir()
+            cipher_name = 'snapshot-20261022T000000Z-1.cms'
+            (exports / cipher_name).write_bytes(b'encrypted-download-test-only')
+            (exports / 'index.json').write_text('{}')
+            (exports / '.env').write_text('must-not-be-readable')
+            caddyfile = str(Path('infra/Caddyfile.cloud').resolve())
+            if options.wsl_distro:
+                caddyfile = subprocess.check_output(['wsl.exe', '-d', options.wsl_distro, '-u', 'root', '--exec', 'wslpath', '-a', '-u', caddyfile]).decode('utf-8').strip()
+            token = 'backup-http-smoke-key-32-characters-only'
+            edge = launch('backup-edge', 'caddy:2-alpine', 8080, [
+                '-e', 'DOMAIN=http://:8080', '-e', 'GATEWAY_API_KEY=' + token,
+                '-v', caddyfile + ':/etc/caddy/Caddyfile:ro', '-v', work + '/backup-export:/backup-export:ro'])
+            for _ in range(40):
+                try:
+                    if client.get(edge + '/ops/backup/index.json', timeout=1).status_code == 404:
+                        break
+                except httpx.RequestError:
+                    pass
+                time.sleep(.25)
+            headers = {'Authorization': 'Bearer ' + token}
+            home = client.get(edge + '/')
+            assert home.status_code == 302 and home.headers['location'] == '/docs'
+            assert client.get(edge + '/ops/backup/index.json').status_code == 404
+            assert client.get(edge + '/ops/backup/index.json', headers={'Authorization': 'Bearer incorrect'}).status_code == 404
+            assert client.get(edge + '/ops/backup/index.json', headers=headers).json() == {}
+            result = client.get(edge + '/ops/backup/' + cipher_name, headers=headers)
+            assert result.content == b'encrypted-download-test-only' and result.headers['cache-control'] == 'no-store'
+            for path in ['/ops/backup/', '/ops/backup/.env', '/ops/backup/../.env', '/ops/backup/unknown.json']:
+                response = client.get(edge + path, headers=headers)
+                assert response.status_code != 200, (path, response.status_code)
+            logs = subprocess.run(docker + ['logs', prefix + '-backup-edge'], capture_output=True, check=True, timeout=15)
+            assert token.encode() not in logs.stdout + logs.stderr
+            report['checks'].append('real Caddy backup endpoint: bearer auth, ciphertext allowlist, no listing/plaintext, no caching or credential logs')
+            print('PASS real Caddy encrypted-backup endpoint authentication and file isolation', flush=True)
             report['status'] = 'passed'
     finally:
         report['api_logs'] = {}

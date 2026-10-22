@@ -175,3 +175,23 @@ def test_health_rejects_stale_backups_and_low_disk_space(snapshot, monkeypatch):
     (snapshot / "snapshot.json").write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="stale"):
         health(snapshot)
+
+
+def test_encrypted_publisher_reuses_verified_snapshot_without_reencrypting(snapshot, recipient, tmp_path, monkeypatch):
+    from infra.backup_export import publish
+    from infra.gateway_backup import fingerprint
+    from types import SimpleNamespace
+    monkeypatch.setattr(shutil, 'disk_usage', lambda path: SimpleNamespace(free=20*1024**3))
+    key, certificate = recipient
+    source = snapshot.rename(tmp_path / 'snapshot-20261022T053336Z-171088')
+    exports = tmp_path / 'exports'
+    first = publish(tmp_path, exports, certificate)
+    cipher = exports / (source.name + '.cms')
+    before = fingerprint(cipher)
+    catalog = json.loads((exports / 'index.json').read_text())
+    assert catalog['backups'] == [{'filename': cipher.name, **before}]
+    assert publish(tmp_path, exports, certificate) == first
+    assert fingerprint(cipher) == before
+    assert set(p.name for p in exports.iterdir()) == {'index.json', cipher.name}
+    restored = tmp_path / 'publisher-restored'
+    assert restore(cipher, restored, key)['model_calls_locked']

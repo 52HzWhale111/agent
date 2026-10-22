@@ -29,8 +29,9 @@ jobs:
       - run: docker build -f agents/knowledge/Dockerfile -t zhigou-knowledge:local .
       - run: docker build -f agents/sandbox/Dockerfile.server -t zhigou-sandbox-api:local .
       - run: docker build -t zhigou-sandbox-jdk17:v1 agents/sandbox
+      - run: docker pull caddy:2-alpine
       - run: python -m infra.smoke_containers
       - run: docker compose --env-file infra/ci.env -f infra/docker-compose.yml config --quiet
       - run: docker compose --env-file infra/ci.env -f infra/docker-compose.cloud.yml config --quiet
       - run: docker run --rm -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost -e ACME_EMAIL=test@example.com caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
-      - run: docker run --rm -v "$PWD/infra/Caddyfile.cloud:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - run: docker run --rm -v "$PWD/infra/Caddyfile.cloud:/etc/caddy/Caddyfile:ro" -e DOMAIN=localhost -e GATEWAY_API_KEY=ci-test-only caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile

@@ -141,11 +141,13 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN to a public DNS name}
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
     ports:
     - 80:80
     - 443:443
     volumes:
     - /opt/agent/infra/Caddyfile.cloud:/etc/caddy/Caddyfile:ro
+    - /opt/zhigou/backup-export:/backup-export:ro
     - caddy-data:/data
     - caddy-config:/config
     logging: *id001
