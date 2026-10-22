@@ -30,6 +30,13 @@ if [ -s "$partial/backend-uploads.sha256" ]; then
 fi
 image=$(docker inspect --format '{{.Image}}' "$container")
 docker run --rm --user 0 --mount "type=bind,source=$PWD/$partial/gateway,target=/snapshot,readonly" --entrypoint python "$image" /app/infra/gateway_backup.py verify /snapshot
+# Trial spending reservations are part of cloud recovery, not renewable credits.
+if [ "${ZHIGOU_COMPOSE_FILE:-infra/docker-compose.yml}" = infra/docker-compose.cloud.yml ]; then
+    docker cp "$(compose ps -q knowledge):/budget" "$partial/model-budget"
+fi
+docker run --rm --user 0 --mount "type=bind,source=$PWD/$partial,target=/snapshot" \
+    --mount "type=bind,source=$PWD/infra,target=/app/infra,readonly" \
+    --entrypoint python "$image" -m infra.snapshot seal /snapshot
 mv "$partial" "backups/snapshot-$stamp"
 # Remove only this script's verified staging copy, after publishing the host backup.
 compose exec -T gateway python -c 'import shutil,sys; shutil.rmtree(sys.argv[1])' "$snapshot"

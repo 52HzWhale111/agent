@@ -2,7 +2,6 @@
 import argparse
 from datetime import datetime, timezone
 import gzip
-import hashlib
 from io import BytesIO
 import json
 import os
@@ -20,6 +19,9 @@ from fastapi.testclient import TestClient
 from backend.app.api import create_app
 from backend.app.config import Settings
 from backend.app.seed import seed_database
+from gateway.main import create_app as create_gateway
+from infra.gateway_backup import backup as backup_gateway, restore as restore_gateway
+from infra.snapshot import encrypt, restore as restore_snapshot, seal, verify
 
 
 def main():
@@ -122,16 +124,37 @@ def main():
         assert sql
         with gzip.open(backup / 'postgres.sql.gz', 'wb') as output:
             output.write(sql)
-        shutil.copytree(root / 'uploads', backup / 'uploads')
-        manifest = {p.relative_to(backup).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in backup.rglob('*') if p.is_file()}
-        (backup / 'sha256.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-        for filename, digest in manifest.items():
-            assert hashlib.sha256((backup / filename).read_bytes()).hexdigest() == digest
-        passed('PostgreSQL dump and original file backup checksums verified')
+        shutil.copytree(root / 'uploads', backup / 'backend-uploads')
+        gateway_source = root / 'gateway-source'
+        with TestClient(create_gateway(gateway_source, start_worker=False)) as client:
+            response = client.post('/api/uploads', files={'file': ('restore.docx', content)})
+            assert response.status_code == 201, response.text
+        backup_gateway(gateway_source, backup / 'gateway')
+        (backup / 'model-budget').mkdir()
+        for number in range(5):
+            (backup / 'model-budget' / f'call-{number}.reserved').write_text('test reservation\n')
+        seal(backup)
+        verify(backup)
+        passed('full PostgreSQL, gateway, business-file and model-budget snapshot checksums verified')
+        key, certificate = root / 'test-private.pem', root / 'test-public.pem'
+        subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+                        '-subj', '/CN=local-recovery-drill', '-keyout', str(key), '-out', str(certificate)],
+                       capture_output=True, check=True, timeout=30)
+        key.chmod(0o600)
+        encrypted, recovered = root / 'snapshot.cms', root / 'recovered-snapshot'
+        encrypt(backup, encrypted, certificate)
+        restore_snapshot(encrypted, recovered, key)
+        verify(recovered)
+        assert len(list((recovered / 'model-budget').glob('call-*.reserved'))) == 8
+        restored_gateway = root / 'restored-gateway'
+        restore_gateway(recovered / 'gateway', restored_gateway)
+        with TestClient(create_gateway(restored_gateway, start_worker=False)) as client:
+            assert client.get('/health/live').status_code == 200
+        passed('real AES-256-GCM encrypted export and cold recovery; gateway starts and model spending stays locked')
         run('exec', name, 'createdb', '-U', 'zhigou', 'zhigou_restore')
-        run('exec', '-i', name, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'zhigou', '-d', 'zhigou_restore', data=gzip.decompress((backup / 'postgres.sql.gz').read_bytes()))
+        run('exec', '-i', name, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'zhigou', '-d', 'zhigou_restore', data=gzip.decompress((recovered / 'postgres.sql.gz').read_bytes()))
         restored_uploads = root / 'restored-uploads'
-        shutil.copytree(backup / 'uploads', restored_uploads)
+        shutil.copytree(recovered / 'backend-uploads', restored_uploads)
         restored = create_app(settings('zhigou_restore', restored_uploads))
         with TestClient(restored) as client:
             headers = login(client)
