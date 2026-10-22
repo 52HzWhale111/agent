@@ -157,13 +157,20 @@ services:
     command:
     - python
     - -u
-    - /monitor/monitor.py
+    - -m
+    - infra.monitor
+    working_dir: /app
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_CONFIG_FILE: /alerts/config.json
+      ALERT_STATE_DIR: /alerts/state
+      BACKUP_INDEX_FILE: /backup-export/index.json
       MONITOR_TARGETS: '{"gateway":"http://gateway:8000/health/ready","knowledge":"http://knowledge:8100/health","sandbox":"http://sandbox:8200/sandbox/run-tests","backend":"http://backend:8000/health"}'
     volumes:
-    - /opt/agent/infra/monitor.py:/monitor/monitor.py:ro
+    - /opt/agent/infra:/app/infra:ro
+    - /opt/zhigou/alerts:/alerts
+    - /opt/zhigou/backup-export:/backup-export:ro
     networks:
     - default
     - sandbox-internal

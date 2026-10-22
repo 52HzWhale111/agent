@@ -1,10 +1,15 @@
-"""HTTP checks and generic JSON webhook alerts; no Docker socket access."""
+"""HTTP and backup-freshness checks with persistent incident notifications."""
 import argparse
+from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
+import shutil
 import time
 import urllib.error
 import urllib.request
+
+from infra.alerts import report as alert
 
 TARGETS = {
     "gateway": "http://gateway:8000/health/ready",
@@ -25,30 +30,25 @@ def check(url, authenticated=True):
         return False
 
 
-def alert(service, healthy):
-    payload = {"service": service, "status": "recovered" if healthy else "unavailable", "time": time.time()}
-    print(json.dumps(payload), flush=True)
-    webhook = os.getenv("ALERT_WEBHOOK_URL")
-    if not webhook:
-        return True
+def backup_health(index):
     try:
-        request = urllib.request.Request(webhook, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=5):
-            return True
-    except OSError:
-        print(json.dumps({"event": "alert_delivery_failed", "service": service}), flush=True)
+        catalog = json.loads(Path(index).read_text(encoding='utf-8'))
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(catalog['snapshot_at'])).total_seconds() / 3600
+        return (catalog.get('version') == 1 and bool(catalog.get('backups')) and 0 <= age <= 36
+                and shutil.disk_usage(Path(index).parent).free >= 5 * 1024**3)
+    except (OSError, ValueError, KeyError, TypeError):
         return False
 
 
-def poll(previous, targets=None):
+def poll(targets=None):
     current = {}
     for name, url in (TARGETS if targets is None else targets).items():
         healthy = check(url, authenticated=name == "gateway")
         current[name] = healthy
-        if name not in previous and healthy:
-            previous[name] = True
-        elif previous.get(name) != healthy and alert(name, healthy):
-            previous[name] = healthy
+        alert(name, healthy)
+    if os.getenv('BACKUP_INDEX_FILE'):
+        current['backup-freshness'] = backup_health(os.environ['BACKUP_INDEX_FILE'])
+        alert('backup-freshness', current['backup-freshness'])
     return current
 
 
@@ -57,9 +57,8 @@ def main():
     parser.add_argument("--once", action="store_true", help="Check once, print status and exit")
     options = parser.parse_args()
     targets = json.loads(os.environ["MONITOR_TARGETS"]) if os.getenv("MONITOR_TARGETS") else TARGETS
-    previous = {}
     while True:
-        current = poll(previous, targets)
+        current = poll(targets)
         if options.once:
             print(json.dumps({"services": current}))
             raise SystemExit(0 if all(current.values()) else 1)

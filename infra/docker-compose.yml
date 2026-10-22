@@ -142,12 +142,16 @@ services:
   monitor:
     image: python:3.12-alpine
     restart: unless-stopped
-    command: ["python", "-u", "/monitor/monitor.py"]
+    command: ["python", "-u", "-m", "infra.monitor"]
+    working_dir: /app
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_CONFIG_FILE: /alerts/config.json
+      ALERT_STATE_DIR: /alerts/state
     volumes:
-      - ./monitor.py:/monitor/monitor.py:ro
+      - ./:/app/infra:ro
+      - ${ALERT_DATA_DIR:-../data/local/alerts}:/alerts
     networks: [default, sandbox-internal]
     logging: *logging
 

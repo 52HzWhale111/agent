@@ -16,10 +16,10 @@
 2. 填写 DOMAIN、ACME_EMAIL；生成随机 GATEWAY_API_KEY、POSTGRES_PASSWORD 和至少32字符的 JWT_SECRET_KEY。数据库密码使用 URL 安全字符，例如64位十六进制。真实值只存服务器，不提交 Git。
 3. 填写 FRONTEND_IMAGE；业务、知识和沙箱API已有Dockerfile可从代码构建，KNOWLEDGE_IMAGE、SANDBOX_IMAGE、BACKEND_IMAGE可选。各服务内部端口为3000、8000、8100、8200。sandbox-execution是仅供构建的profile，deploy.sh先构建执行镜像，再启动正常服务；不要手工用该profile执行up。建议发布时固定不可变tag/digest。
 4. 知识服务填写 LLM_API_KEY、LLM_BASE_URL=https://api.deepseek.com、LLM_MODEL=deepseek-flash。SANDBOX_WORK_DIR填Docker宿主机绝对目录，宿主/API容器内保持同路径；首次使用空的专用目录，由Docker创建，或确认仅该目录归属UID 0可写。API已丢弃DAC覆盖能力，预建为其他用户所有时会拒绝写入；不要放宽整个仓库权限。API仅在私有容器网络监听8200，不发布端口。API挂载该专用主机的Docker socket以创建受限执行容器，**socket的只读挂载不会限制Docker API权限**，该API进程具备主机Docker管理能力。因此使用专用部署环境，仅允许受信网关访问；不向学生开放Docker socket、API端口或任意镜像/路径参数。执行容器仍无网络、256MiB、5秒测试限时及能力丢弃。
-5. 填写 ALERT_WEBHOOK_URL：能接收 `{service,status,time}` JSON 的 HTTPS 通知入口；这里不是直接兼容所有飞书/钉钉/邮件接口，需要通知服务或格式转换。未填写仅打印日志，**不会收到通知**。
+5. 配置已有邮箱的私密 SMTP 文件，服务故障与备份失败邮件通知见 [免费邮件告警 v1](1022-免费邮件告警-v1.md)。也保留接收 `{service,status,time}` 的旧版通用 JSON Webhook；未设置接收渠道时只记录并保留待投递事件，**不会收到通知**。
 6. 运行 `sh infra/deploy.sh`，查看 `docker compose --env-file .env -f infra/docker-compose.yml ps`。
 7. 确认公网 `https://<域名>/` 打开；接口 `/api/*` 到网关，其中 `/api/v1/*` 转发真实业务接口；`/business/*` 去掉此前缀后到业务后端。Agent接口使用业务登录的JWT，GATEWAY_API_KEY仅作为运维凭证。业务格式见 backend/README.md。
-8. `GET /health/ready` 携带网关运维凭证，确认依赖路由可达。工程探测仅OPTIONS /sandbox/run-tests，不代表Docker执行已验证；上线仍须提交一次真实Java/JUnit任务。监控逐项检查网关、前端、后端和两个 Agent，每轮间隔30秒（单个检查最多5秒）；故障及恢复仅在状态变化时发通知，失败投递会重试。业务 /health 已检查数据库连通性。
+8. `GET /health/ready` 携带网关运维凭证，确认依赖路由可达。工程探测仅OPTIONS /sandbox/run-tests，不代表Docker执行已验证；上线仍须提交一次真实Java/JUnit任务。监控逐项检查实际部署的服务，每轮间隔30秒（单个检查最多5秒）；故障及恢复按状态变化持久排队，失败投递会重试。业务 /health 已检查数据库连通性。
 
 Caddy 持久化证书并自动续期；所有服务设置 unless-stopped，Docker 自启动后容器随之恢复。故意用 docker compose stop 停止的服务应手动 start，不能把管理员主动停止误认为重启策略失败。网关 liveness 不依赖 Agent，单个 Agent 故障不会把其他 API 一起停掉。数据库仅内网访问，网关8000只绑定服务器回环地址。
 
@@ -48,7 +48,7 @@ sudo systemctl start zhigou-backup.service
 sudo journalctl -u zhigou-backup.service -n 50 --no-pager
 ```
 
-也可保留原先每天03:15的cron方式，但两者只启用一个，避免重复备份。systemd配置参考 [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html) 与 [systemd.time](https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html)。当前Windows未安装或启用此timer，服务器时钟/时区数据库和实际触发需到Linux上验收。备份失败记录在journal，暂未接入外部备份失败通知；不能把服务故障Webhook当作备份结果告警。
+也可保留原先每天03:15的cron方式，但两者只启用一个，避免重复备份。systemd配置参考 [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html) 与 [systemd.time](https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html)。香港服务器已启用该 timer；整个备份服务（包括加密导出）的结果通过 `zhigou-backup-alerts.conf` 记录，监控容器重试待投递邮件；备份过期和本机同步失败也接入同套邮件模块，见上述免费邮件告警说明。
 
 ### 网关：无需队友即可做本地备份恢复
 
@@ -91,5 +91,5 @@ cd 'D:\软工\agent'
 | 知识真实模型调用 | DeepSeek三链路已通过；20案例已运行，资料/误报与人工验收待补 |
 | 工程服务镜像 | 执行镜像与HTTP API Dockerfile已提供；本地8组真实执行通过 |
 | 前端/业务后端镜像 | 前端待交付；业务后端已有Dockerfile与CI构建 |
-| 告警接收渠道与截图 | 云端故障/恢复日志已演练，外部通知接收渠道仍未配置 |
-| 备份/恢复演练结果 | 服务器每日同机备份已启用；本地全量加密与真实PostgreSQL恢复已补验，生产异机副本/恢复仍待配置 |
+| 告警接收渠道与截图 | 已增加 SMTP 邮件、每日备份结果及本机同步失败通知；部署验收记录见免费邮件告警说明 |
+| 备份/恢复演练结果 | 每日备份、自动加密及本机每小时异机拉取已启用；生产密文隔离恢复通过，见自动异机备份说明 |

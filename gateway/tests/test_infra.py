@@ -3,8 +3,16 @@ import json
 from pathlib import Path
 import urllib.error
 
-from infra import monitor
+from infra import alerts, monitor
+import pytest
 import yaml
+
+
+@pytest.fixture(autouse=True)
+def isolated_alerts(tmp_path, monkeypatch):
+    monkeypatch.setenv('ALERT_STATE_DIR', str(tmp_path / 'alerts'))
+    monkeypatch.delenv('ALERT_CONFIG_FILE', raising=False)
+    monkeypatch.delenv('BACKUP_INDEX_FILE', raising=False)
 
 
 def test_monitor_checks_and_webhook(monkeypatch, capsys):
@@ -25,7 +33,7 @@ def test_monitor_checks_and_webhook(monkeypatch, capsys):
         raise urllib.error.URLError('offline')
     monkeypatch.setattr(monitor.urllib.request, 'urlopen', fail)
     assert not monitor.check('http://gateway/health/ready')
-    assert not monitor.alert('sandbox', False)
+    assert not alerts.deliver({'service': 'sandbox', 'status': 'unavailable', 'time': 1})
     assert 'secret' not in capsys.readouterr().out
 
 
@@ -46,29 +54,35 @@ def test_compose_structure():
 
 
 def test_monitor_outage_retry_recovery_and_no_duplicates(monkeypatch):
-    state = {}
     calls = []
     healthy = True
     delivered = True
+    now = 100
+    monkeypatch.setattr(alerts.time, 'time', lambda: now)
     monkeypatch.setattr(monitor, 'check', lambda url, authenticated=True: healthy)
-    def notify(service, status):
-        calls.append((service, status))
+    def notify(event, config_path=None):
+        calls.append((event['service'], event['status']))
         return delivered
-    monkeypatch.setattr(monitor, 'alert', notify)
+    monkeypatch.setattr(alerts, 'deliver', notify)
     targets = {'sandbox': 'http://sandbox/health'}
-    monitor.poll(state, targets)
-    assert state == {'sandbox': True} and calls == []
+    monitor.poll(targets)
+    assert calls == []
     healthy, delivered = False, False
-    monitor.poll(state, targets)
-    assert state == {'sandbox': True}
+    monitor.poll(targets)
     delivered = True
-    monitor.poll(state, targets)
-    monitor.poll(state, targets)
-    assert calls == [('sandbox', False), ('sandbox', False)]
+    monitor.poll(targets)
+    assert len(calls) == 1  # Delivery retries are limited to once a minute.
     healthy = True
-    monitor.poll(state, targets)
-    monitor.poll(state, targets)
-    assert calls[-1] == ('sandbox', True) and len(calls) == 3
+    now += 61
+    monitor.poll(targets)  # Even a recovered outage still delivers its original failure first.
+    now += 61
+    monitor.poll(targets)
+    monitor.poll(targets)
+    assert calls == [('sandbox', 'unavailable'), ('sandbox', 'unavailable'), ('sandbox', 'recovered')]
+    # State survives process restarts; the next poll has no in-memory history.
+    now += 61
+    monitor.poll(targets)
+    assert len(calls) == 3
 
 
 def test_monitor_real_http_webhook(monkeypatch):
@@ -92,15 +106,17 @@ def test_monitor_real_http_webhook(monkeypatch):
     thread.start()
     url = f'http://127.0.0.1:{server.server_port}'
     monkeypatch.setenv('ALERT_WEBHOOK_URL', url + '/notifications')
+    now = 100
+    monkeypatch.setattr(alerts.time, 'time', lambda: now)
     try:
-        state = {}
         targets = {'sandbox': url + '/health'}
-        monitor.poll(state, targets)
+        monitor.poll(targets)
         healthy = False
-        monitor.poll(state, targets)
-        monitor.poll(state, targets)
+        monitor.poll(targets)
+        monitor.poll(targets)
         healthy = True
-        monitor.poll(state, targets)
+        now += 61
+        monitor.poll(targets)
         assert [event['status'] for event in events] == ['unavailable', 'recovered']
         assert all(event['service'] == 'sandbox' for event in events)
     finally:

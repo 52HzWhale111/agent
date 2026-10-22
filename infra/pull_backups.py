@@ -15,6 +15,7 @@ import httpx
 
 from infra.backup_export import NAME
 from infra.gateway_backup import fingerprint
+from infra.alerts import report
 
 MONTHLY_BYTES = 1024 ** 3
 MAX_FILE_BYTES = 64 * 1024 ** 2
@@ -125,10 +126,12 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
         (directory / 'last-sync.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
         print(json.dumps(result))
+        report('offsite-backup', False, directory / 'alerts', config.get('alert_config'))
         raise SystemExit(1)
     (directory / 'last-sync.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     (directory / 'last-success.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result))
+    report('offsite-backup', True, directory / 'alerts', config.get('alert_config'))
 
 
 if __name__ == '__main__':
