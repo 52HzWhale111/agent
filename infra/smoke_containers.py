@@ -23,6 +23,13 @@ def main():
     prefix = 'zhigou-api-drill-' + uuid.uuid4().hex[:12]
     root = Path('data/local', prefix).resolve()
     root.mkdir(parents=True)
+    # Create runner-owned download fixtures before the sandbox root changes to UID 0.
+    exports = root / 'backup-export'
+    exports.mkdir()
+    cipher_name = 'snapshot-20261022T000000Z-1.cms'
+    (exports / cipher_name).write_bytes(b'encrypted-download-test-only')
+    (exports / 'index.json').write_text('{}')
+    (exports / '.env').write_text('must-not-be-readable')
     names = []
     holder = None
     report = {'verified_at': datetime.now(timezone.utc).isoformat(), 'checks': []}
@@ -88,12 +95,6 @@ def main():
             assert response.status_code == 503 and response.json()['detail']['code'] == 'MODEL_NOT_CONFIGURED'
             report['checks'].append('packaged knowledge API loads 60 original + 2 supplemental points and templates; absent credentials rejected')
             print('PASS packaged knowledge API: no placeholder success without credentials', flush=True)
-            exports = root / 'backup-export'
-            exports.mkdir()
-            cipher_name = 'snapshot-20261022T000000Z-1.cms'
-            (exports / cipher_name).write_bytes(b'encrypted-download-test-only')
-            (exports / 'index.json').write_text('{}')
-            (exports / '.env').write_text('must-not-be-readable')
             caddyfile = str(Path('infra/Caddyfile.cloud').resolve())
             if options.wsl_distro:
                 caddyfile = subprocess.check_output(['wsl.exe', '-d', options.wsl_distro, '-u', 'root', '--exec', 'wslpath', '-a', '-u', caddyfile]).decode('utf-8').strip()
